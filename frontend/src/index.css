@@ -1,0 +1,252 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Light mode colors using OKLCH */
+    --background: oklch(100% 0 0);
+    --foreground: oklch(20% 0 0);
+    --card: oklch(100% 0 0);
+    --card-foreground: oklch(20% 0 0);
+    --popover: oklch(100% 0 0);
+    --popover-foreground: oklch(20% 0 0);
+    --primary: oklch(55% 0.15 25);
+    --primary-foreground: oklch(100% 0 0);
+    --secondary: oklch(96% 0 0);
+    --secondary-foreground: oklch(20% 0 0);
+    --muted: oklch(96% 0 0);
+    --muted-foreground: oklch(50% 0 0);
+    --accent: oklch(96% 0 0);
+    --accent-foreground: oklch(20% 0 0);
+    --destructive: oklch(55% 0.22 25);
+    --destructive-foreground: oklch(100% 0 0);
+    --border: oklch(90% 0 0);
+    --input: oklch(90% 0 0);
+    --ring: oklch(55% 0.15 25);
+    --radius: 0.5rem;
+    --chart-1: oklch(60% 0.15 25);
+    --chart-2: oklch(70% 0.15 145);
+    --chart-3: oklch(65% 0.15 85);
+    --chart-4: oklch(75% 0.15 205);
+    --chart-5: oklch(68% 0.15 325);
+  }
+
+  .dark {
+    /* Dark mode colors using OKLCH */
+    --background: oklch(20% 0 0);
+    --foreground: oklch(95% 0 0);
+    --card: oklch(20% 0 0);
+    --card-foreground: oklch(95% 0 0);
+    --popover: oklch(20% 0 0);
+    --popover-foreground: oklch(95% 0 0);
+    --primary: oklch(95% 0 0);
+    --primary-foreground: oklch(20% 0 0);
+    --secondary: oklch(30% 0 0);
+    --secondary-foreground: oklch(95% 0 0);
+    --muted: oklch(30% 0 0);
+    --muted-foreground: oklch(65% 0 0);
+    --accent: oklch(30% 0 0);
+    --accent-foreground: oklch(95% 0 0);
+    --destructive: oklch(40% 0.15 25);
+    --destructive-foreground: oklch(95% 0 0);
+    --border: oklch(30% 0 0);
+    --input: oklch(30% 0 0);
+    --ring: oklch(70% 0.15 145);
+    --chart-1: oklch(75% 0.15 205);
+    --chart-2: oklch(70% 0.15 145);
+    --chart-3: oklch(65% 0.15 85);
+    --chart-4: oklch(60% 0.15 25);
+    --chart-5: oklch(68% 0.15 325);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Christmas-themed utilities */
+@layer utilities {
+  .christmas-gradient {
+    background: linear-gradient(135deg, #c41e3a 0%, #165b33 100%);
+  }
+  
+  .christmas-gradient-reverse {
+    background: linear-gradient(135deg, #165b33 0%, #c41e3a 100%);
+  }
+  
+  .gold-gradient {
+    background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+  }
+  
+  .christmas-button {
+    @apply bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-bold py-3 px-6 rounded-full transition-all duration-300 shadow-lg transform hover:scale-105;
+  }
+  
+  .christmas-card {
+    @apply bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl p-8 border-4 border-gold-400;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(196, 30, 58, 0.6);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(196, 30, 58, 0.8);
+}
+
+/* Animations */
+@keyframes snowfall {
+  0% {
+    transform: translateY(-10vh) translateX(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh) translateX(10vw);
+    opacity: 0;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-snowfall {
+  animation: snowfall 10s linear infinite;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Rich Text Editor Styling */
+.rich-text-editor-wrapper {
+  @apply w-full;
+}
+
+.christmas-quill-editor {
+  @apply rounded-lg overflow-hidden;
+}
+
+.christmas-quill-editor .ql-toolbar {
+  @apply bg-red-50 border-2 border-red-200 rounded-t-lg;
+}
+
+.christmas-quill-editor .ql-container {
+  @apply border-2 border-red-200 border-t-0 rounded-b-lg bg-white;
+  height: auto;
+  max-height: 120px;
+}
+
+.christmas-quill-editor .ql-editor {
+  @apply text-gray-800;
+  height: auto;
+  max-height: 120px;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.6;
+  padding: 12px 15px;
+}
+
+.christmas-quill-editor .ql-editor.ql-blank::before {
+  @apply text-gray-400 italic;
+}
+
+.christmas-quill-editor .ql-stroke {
+  @apply stroke-red-600;
+}
+
+.christmas-quill-editor .ql-fill {
+  @apply fill-red-600;
+}
+
+.christmas-quill-editor .ql-picker-label {
+  @apply text-red-600;
+}
+
+.christmas-quill-editor button:hover .ql-stroke,
+.christmas-quill-editor button:focus .ql-stroke,
+.christmas-quill-editor button.ql-active .ql-stroke {
+  @apply stroke-red-800;
+}
+
+.christmas-quill-editor button:hover .ql-fill,
+.christmas-quill-editor button:focus .ql-fill,
+.christmas-quill-editor button.ql-active .ql-fill {
+  @apply fill-red-800;
+}
+
+.christmas-quill-editor .ql-toolbar button {
+  @apply hover:bg-red-100 rounded transition-colors;
+}
+
+.christmas-quill-editor .ql-toolbar button.ql-active {
+  @apply bg-red-100;
+}
+
+/* Prose styling for rendered HTML content */
+.prose {
+  @apply text-gray-800;
+}
+
+.prose a {
+  @apply text-blue-600 hover:text-blue-800 underline;
+}
+
+.prose strong {
+  @apply font-bold text-gray-900;
+}
+
+.prose em {
+  @apply italic;
+}
+
+.prose ul {
+  @apply list-disc list-inside my-2;
+}
+
+.prose ol {
+  @apply list-decimal list-inside my-2;
+}
+
+.prose li {
+  @apply my-1;
+}
+
+.prose p {
+  @apply my-2;
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+  @apply font-bold text-gray-900 mt-4 mb-2;
+}

@@ -1,0 +1,108 @@
+type UserRole = 
+ variant {
+   admin;
+   guest;
+   user;
+ };
+type UserProfile = record {name: text;};
+type Time = int;
+type StreamingToken = 
+ record {
+   index: nat;
+   resource: text;
+ };
+type StreamingStrategy = variant {
+                           Callback:
+                            record {
+                              callback: StreamingCallback;
+                              token: StreamingToken;
+                            };};
+type StreamingCallbackHttpResponse = 
+ record {
+   body: blob;
+   token: opt StreamingToken;
+ };
+type StreamingCallback = func (StreamingToken) ->
+                          (StreamingCallbackHttpResponse) query;
+type Round = 
+ record {
+   assignments: vec Assignment;
+   deadline: Time;
+   profiles: vec record {
+                   principal;
+                   Profile;
+                 };
+ };
+type Profile = 
+ record {
+   name: text;
+   wishList: text;
+ };
+type HttpResponse = 
+ record {
+   body: blob;
+   headers: vec HeaderField;
+   status_code: nat16;
+   streaming_strategy: opt StreamingStrategy;
+ };
+type HttpRequest = 
+ record {
+   body: blob;
+   headers: vec HeaderField;
+   method: text;
+   url: text;
+ };
+type HeaderField = 
+ record {
+   text;
+   text;
+ };
+type FileReference = 
+ record {
+   hash: text;
+   path: text;
+ };
+type Assignment = 
+ record {
+   recipient: principal;
+   santa: principal;
+ };
+service : {
+  assignCallerUserRole: (user: principal, role: UserRole) -> ();
+  createOrUpdateProfile: (name: text, wishList: text) -> ();
+  deletePastRound: (timestamp: Time) -> ();
+  dropFileReference: (path: text) -> ();
+  getAllAssignments: () -> (vec Assignment) query;
+  getAssignmentNames: () -> (vec record {
+                                   text;
+                                   text;
+                                 }) query;
+  getCallerUserProfile: () -> (opt UserProfile) query;
+  getCallerUserRole: () -> (UserRole) query;
+  getDeadline: () -> (Time) query;
+  getFileReference: (path: text) -> (FileReference) query;
+  getMyAssignment: () -> (opt Profile) query;
+  getPastRounds: () -> (vec record {
+                              Time;
+                              Round;
+                            }) query;
+  getProfile: (p: principal) -> (opt Profile) query;
+  getUserProfile: (user: principal) -> (opt UserProfile) query;
+  httpStreamingCallback: (token: StreamingToken) ->
+   (record {
+      body: blob;
+      token: opt StreamingToken;
+    }) query;
+  http_request: (request: HttpRequest) -> (HttpResponse) query;
+  initializeAccessControl: () -> ();
+  isAdmin: (caller: principal) -> (bool);
+  isCallerAdmin: () -> (bool) query;
+  listFileReferences: () -> (vec FileReference) query;
+  listParticipantNames: () -> (vec text) query;
+  registerFileReference: (path: text, hash: text) -> ();
+  resetRound: () -> ();
+  rollbackToSubmissionStage: () -> ();
+  saveCallerUserProfile: (profile: UserProfile) -> ();
+  setDeadline: (newDeadline: Time) -> ();
+  triggerResolution: () -> ();
+}
