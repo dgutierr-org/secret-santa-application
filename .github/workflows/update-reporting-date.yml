@@ -1,0 +1,77 @@
+name: Update Reporting Date on Project Item Changes
+
+on:
+  projects_v2_item:
+    types: [edited]
+
+# Requires a PAT with 'project' scope stored as secret GH_TOKEN.
+# The default GITHUB_TOKEN does not have write access to user-level projects.
+
+jobs:
+  update-reporting-date:
+    name: Set 'Reporting date' to today
+    runs-on: ubuntu-latest
+    # Only run when one of the tracked fields is changed
+    if: |
+      contains(
+        fromJSON('["Status", "Priority", "Estimate", "Remaining Work", "Time Spent"]'),
+        github.event.changes.field_value.field_name
+      )
+    steps:
+      - name: Set 'Reporting date' field to today
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          PROJECT_ID: ${{ github.event.projects_v2_item.project_node_id }}
+          ITEM_ID: ${{ github.event.projects_v2_item.node_id }}
+        run: |
+          TODAY=$(date -u +%Y-%m-%d)
+
+          echo "Field '${CHANGED_FIELD}' changed — updating 'Reporting date' to $TODAY"
+
+          # Resolve the 'Reporting date' field ID from the project
+          REPORTING_DATE_FIELD_ID=$(gh api graphql -f query='
+            query($projectId: ID!) {
+              node(id: $projectId) {
+                ... on ProjectV2 {
+                  fields(first: 30) {
+                    nodes {
+                      ... on ProjectV2Field {
+                        id
+                        name
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ' -f projectId="$PROJECT_ID" \
+            --jq '.data.node.fields.nodes[] | select(.name == "Reporting date") | .id')
+
+          if [ -z "$REPORTING_DATE_FIELD_ID" ]; then
+            echo "Error: 'Reporting date' field not found in project $PROJECT_ID."
+            exit 1
+          fi
+
+          echo "Resolved 'Reporting date' field ID: $REPORTING_DATE_FIELD_ID"
+
+          # Update the 'Reporting date' field value to today
+          gh api graphql -f query='
+            mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $date: Date!) {
+              updateProjectV2ItemFieldValue(input: {
+                projectId: $projectId
+                itemId: $itemId
+                fieldId: $fieldId
+                value: { date: $date }
+              }) {
+                projectV2Item {
+                  id
+                }
+              }
+            }
+          ' \
+            -f projectId="$PROJECT_ID" \
+            -f itemId="$ITEM_ID" \
+            -f fieldId="$REPORTING_DATE_FIELD_ID" \
+            -f date="$TODAY"
+
+          echo "Successfully set 'Reporting date' to $TODAY for item $ITEM_ID"
