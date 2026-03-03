@@ -1,4 +1,4 @@
-# track-reporting-date workflow — GitHub Project Setup Guide
+# GitHub Project Setup Guide
 
 ## Project
 
