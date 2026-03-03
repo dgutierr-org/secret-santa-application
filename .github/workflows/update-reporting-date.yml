@@ -2,7 +2,7 @@ name: Update Reporting Date on Project Item Changes
 
 on:
   schedule:
-    - cron: '*/2 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 # Requires a PAT with 'project' and 'read:org' scopes stored as secret GH_TOKEN.
@@ -10,15 +10,15 @@ on:
 
 jobs:
   update-reporting-date:
-    name: Check and update 'Reporting date'
+    name: Check and update 'Reporting Date'
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GH_TOKEN }}
       PROJECT_OWNER: dgutierr-org
       PROJECT_NUMBER: 1
-      LOOKBACK_MINUTES: 3
+      LOOKBACK_MINUTES: 6
     steps:
-      - name: Update 'Reporting date' for items with changed tracked fields
+      - name: Update 'Reporting Date' for items with changed tracked fields
         run: |
           set -e
 
@@ -94,11 +94,11 @@ jobs:
           ' -f owner="$PROJECT_OWNER" -F number=$PROJECT_NUMBER)
 
           PROJECT_ID=$(echo "$RESPONSE" | jq -r '.data.organization.projectV2.id')
-          REPORTING_DATE_FIELD_ID=$(echo "$RESPONSE" | jq -r '.data.organization.projectV2.fields.nodes[] | select(.name == "Reporting date") | .id')
+          REPORTING_DATE_FIELD_ID=$(echo "$RESPONSE" | jq -r '.data.organization.projectV2.fields.nodes[] | select(.name == "Reporting Date") | .id')
           REPORTING_HASH_FIELD_ID=$(echo "$RESPONSE" | jq -r '.data.organization.projectV2.fields.nodes[] | select(.name == "Reporting Hash") | .id')
 
           if [ -z "$REPORTING_DATE_FIELD_ID" ]; then
-            echo "Error: 'Reporting date' field not found in project."
+            echo "Error: 'Reporting Date' field not found in project."
             exit 1
           fi
           if [ -z "$REPORTING_HASH_FIELD_ID" ]; then
@@ -107,7 +107,7 @@ jobs:
           fi
 
           echo "Project ID             : $PROJECT_ID"
-          echo "Reporting date field ID: $REPORTING_DATE_FIELD_ID"
+          echo "Reporting Date field ID: $REPORTING_DATE_FIELD_ID"
           echo "Reporting Hash field ID: $REPORTING_HASH_FIELD_ID"
           echo "Processing items updated since: $(date -u -d "${LOOKBACK_MINUTES} minutes ago")"
 
@@ -148,9 +148,9 @@ jobs:
               continue
             fi
 
-            echo "  → Hash mismatch — updating 'Reporting date' to $TODAY and 'Reporting Hash'."
+            echo "  → Hash mismatch — updating 'Reporting Date' to $TODAY and 'Reporting Hash'."
 
-            # Update 'Reporting date' to today
+            # Update 'Reporting Date' to today
             gh api graphql -f query='
               mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $date: Date!) {
                 updateProjectV2ItemFieldValue(input: {

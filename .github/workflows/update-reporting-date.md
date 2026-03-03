@@ -2,7 +2,7 @@
 
 ## What it does
 
-Runs every 2 minutes and checks all project items updated in the last 3 minutes. For each recently updated item it computes a SHA-256 hash of the five tracked fields (**Status**, **Priority**, **Estimate**, **Remaining Work**, **Time Spent**) and compares it against the value stored in the **`Reporting Hash`** field. If the hashes differ, one of the tracked fields has changed and **`Reporting date`** is set to today. The new hash is then saved back to **`Reporting Hash`** for the next comparison.
+Runs every 5 minutes and checks all project items updated in the last 6 minutes. For each recently updated item it computes a SHA-256 hash of the five tracked fields (**Status**, **Priority**, **Estimate**, **Remaining Work**, **Time Spent**) and compares it against the value stored in the **`Reporting Hash`** field. If the hashes differ, one of the tracked fields has changed and **`Reporting Date`** is set to today. The new hash is then saved back to **`Reporting Hash`** for the next comparison.
 
 No action is taken when non-tracked fields change (e.g. title, assignee).
 
@@ -16,7 +16,7 @@ In **`https://github.com/orgs/dgutierr-org/projects/1`**, make sure the followin
 
 | Field name       | Type   | Purpose                                      |
 |------------------|--------|----------------------------------------------|
-| `Reporting date` | Date   | Set to today when a tracked field changes    |
+| `Reporting Date` | Date   | Set to today when a tracked field changes    |
 | `Reporting Hash` | Text   | Stores the hash of the last known field state |
 
 ### 2. Create a Personal Access Token (PAT)
@@ -42,4 +42,4 @@ In **`https://github.com/orgs/dgutierr-org/projects/1`**, make sure the followin
 
 ---
 
-Once all steps are done, the workflow will run automatically every 2 minutes and update `Reporting date` whenever a tracked field is changed.
+Once all steps are done, the workflow will run automatically every 5 minutes and update `Reporting Date` whenever a tracked field is changed.
