@@ -129,21 +129,21 @@ jobs:
             REPORTING_LOG=$(get_field "$item" "Reporting Log")
 
             # Parse tracked field values from the latest (first) entry in the log.
-            # Log format: ENTRY1|ENTRY2|... where each entry is DATE,STATUS,PRIORITY,ESTIMATE,REMAINING_WORK,TIME_SPENT
+            # Log format: ENTRY1 | ENTRY2 | ... where each entry is DATE, STATUS, PRIORITY, ESTIMATE, REMAINING_WORK, TIME_SPENT
             if [ -z "$REPORTING_LOG" ]; then
               LAST_STATUS="" LAST_PRIORITY="" LAST_ESTIMATE=""
               LAST_REMAINING_WORK="" LAST_TIME_SPENT=""
             else
-              LAST_ENTRY=$(echo "$REPORTING_LOG" | cut -d'|' -f1)
-              LAST_STATUS=$(echo         "$LAST_ENTRY" | cut -d',' -f2)
-              LAST_PRIORITY=$(echo       "$LAST_ENTRY" | cut -d',' -f3)
-              LAST_ESTIMATE=$(echo       "$LAST_ENTRY" | cut -d',' -f4)
-              LAST_REMAINING_WORK=$(echo "$LAST_ENTRY" | cut -d',' -f5)
-              LAST_TIME_SPENT=$(echo     "$LAST_ENTRY" | cut -d',' -f6)
+              LAST_ENTRY=$(echo "$REPORTING_LOG" | sed 's/ | /\n/g' | head -1)
+              LAST_STATUS=$(echo         "$LAST_ENTRY" | cut -d',' -f2 | xargs)
+              LAST_PRIORITY=$(echo       "$LAST_ENTRY" | cut -d',' -f3 | xargs)
+              LAST_ESTIMATE=$(echo       "$LAST_ENTRY" | cut -d',' -f4 | xargs)
+              LAST_REMAINING_WORK=$(echo "$LAST_ENTRY" | cut -d',' -f5 | xargs)
+              LAST_TIME_SPENT=$(echo     "$LAST_ENTRY" | cut -d',' -f6 | xargs)
             fi
 
-            echo "  Current : $STATUS,$PRIORITY,$ESTIMATE,$REMAINING_WORK,$TIME_SPENT"
-            echo "  Last log: $LAST_STATUS,$LAST_PRIORITY,$LAST_ESTIMATE,$LAST_REMAINING_WORK,$LAST_TIME_SPENT"
+            echo "  Current : $STATUS, $PRIORITY, $ESTIMATE, $REMAINING_WORK, $TIME_SPENT"
+            echo "  Last log: $LAST_STATUS, $LAST_PRIORITY, $LAST_ESTIMATE, $LAST_REMAINING_WORK, $LAST_TIME_SPENT"
 
             # Skip if nothing has changed
             if [ "$STATUS"         = "$LAST_STATUS"         ] && \
@@ -158,15 +158,15 @@ jobs:
 
             echo "  → Change detected. Updating 'Reporting Date' and prepending to 'Reporting Log'."
 
-            # Build new entry: DATE,STATUS,PRIORITY,ESTIMATE,REMAINING_WORK,TIME_SPENT
-            NEW_ENTRY="${TODAY},${STATUS},${PRIORITY},${ESTIMATE},${REMAINING_WORK},${TIME_SPENT}"
+            # Build new entry: DATE, STATUS, PRIORITY, ESTIMATE, REMAINING_WORK, TIME_SPENT
+            NEW_ENTRY="${TODAY}, ${STATUS}, ${PRIORITY}, ${ESTIMATE}, ${REMAINING_WORK}, ${TIME_SPENT}"
 
             # Prepend new entry and keep at most 5 entries total (discard oldest)
             if [ -z "$REPORTING_LOG" ]; then
               NEW_LOG="$NEW_ENTRY"
             else
-              TRIMMED=$(echo "$REPORTING_LOG" | tr '|' '\n' | head -4 | tr '\n' '|' | sed 's/|$//')
-              NEW_LOG="${NEW_ENTRY}|${TRIMMED}"
+              TRIMMED=$(echo "$REPORTING_LOG" | sed 's/ | /\n/g' | head -4 | paste -sd'~' | sed 's/~/ | /g')
+              NEW_LOG="${NEW_ENTRY} | ${TRIMMED}"
             fi
 
             # Update 'Reporting Date' to today
