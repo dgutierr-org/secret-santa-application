@@ -6,6 +6,8 @@ Automatically sets the `Reporting date` field to today in the GitHub Project whe
 
 No action is taken for changes to other fields or for repository issue changes.
 
+> **Note:** The `projects_v2_item` event that triggers this workflow is only available for **organization-level projects**. The project must be owned by a GitHub organization (not a personal account). This workflow is configured for `https://github.com/orgs/dgutierr-org/projects/1`.
+
 ---
 
 ## Setup
@@ -15,10 +17,12 @@ No action is taken for changes to other fields or for repository issue changes.
 1. Go to **GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)**
 2. Click **"Generate new token (classic)"**
 3. Give it a name (e.g. `secret-santa-project-automation`)
-4. Under **Scopes**, check **`project`** — this grants read/write access to GitHub Projects v2
+4. Under **Scopes**, check both:
+   - **`project`** — grants read/write access to GitHub Projects v2
+   - **`read:org`** — required to access organization-level project data
 5. Click **"Generate token"** and **copy it immediately** (you won't see it again)
 
-> Why not use the default `GITHUB_TOKEN`? That token is automatically created per workflow run and only has access to the repository itself. GitHub Projects (v2) at the user level are outside the repository scope, so the default token can't read or update project fields.
+> Why not use the default `GITHUB_TOKEN`? That token is automatically created per workflow run and is scoped to the repository only. It cannot read or write fields on organization-level GitHub Projects v2.
 
 ### 2. Store the token as a repository secret
 
@@ -29,9 +33,13 @@ No action is taken for changes to other fields or for repository issue changes.
    - **Secret**: paste the token you copied above
 4. Click **"Add secret"**
 
-### 3. Verify the project is linked to the repository
+### 3. Link the repository to the organization project
 
-Make sure the repository is added to your project (`https://github.com/users/dgutierr/projects/1`). The `projects_v2_item` event only fires for projects that the workflow's repository is associated with. You can check this in the project settings under **"Manage access"** or by simply adding the repo from the project's side panel.
+The `projects_v2_item` event only fires for projects that the repository is associated with. To link it:
+
+1. Go to **`https://github.com/orgs/dgutierr-org/projects/1`**
+2. Open the project **Settings → Manage access**
+3. Add the `secret-santa-application` repository, or add it from the issue/PR side panel inside the project
 
 ---
 
