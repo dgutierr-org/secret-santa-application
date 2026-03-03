@@ -33,15 +33,15 @@ These fields are updated automatically and should not be edited manually.
 
 #### Reporting Log entry format
 
-Entries are separated by `|`, ordered **newest first**. Each entry uses `,` to separate field values:
+Entries are separated by ` | `, ordered **newest first**. Field values within each entry are separated by `, `:
 
 ```
-DATE,Status,Priority,Estimate,Remaining Work,Time Spent
+DATE, Status, Priority, Estimate, Remaining Work, Time Spent
 ```
 
 Multiple entries example (newest → oldest, max 5):
 ```
-2026-03-03,In Progress,High,8,5,3|2026-03-01,Backlog,High,8,8,0
+2026-03-03, In Progress, High, 8, 5, 3 | 2026-03-01, Backlog, High, 8, 8, 0
 ```
 
 The oldest entry is automatically discarded when the log exceeds 5 entries.
