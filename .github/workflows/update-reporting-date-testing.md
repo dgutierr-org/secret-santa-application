@@ -17,7 +17,7 @@ Make sure the setup from the guide is complete:
 
 3. **Wait up to 5 minutes** for the scheduled workflow to trigger
 
-4. **Check the workflow ran** → go to your repository → **Actions** tab → open the latest run of `Update Reporting Date on Project Item Changes` and inspect the logs. You should see the item listed with a change detected and an update confirmation.
+4. **Check the workflow ran** → go to your repository → **Actions** tab → open the latest run of `Track Reporting Date on Field Changes` and inspect the logs. You should see the item listed with a change detected and an update confirmation.
 
 5. **Verify the result** → go back to the project item and confirm:
    - `Reporting Date` is set to today
@@ -27,7 +27,7 @@ Make sure the setup from the guide is complete:
 
 ## Manual trigger (skip the 5-minute wait)
 
-1. Go to **Actions → Update Reporting Date on Project Item Changes → Run workflow**
+1. Go to **Actions → Track Reporting Date on Field Changes → Run workflow**
 2. Click **"Run workflow"**
 3. The workflow runs immediately against the latest project state
 
