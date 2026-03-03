@@ -1,4 +1,4 @@
-# update-reporting-date workflow — GitHub Project Setup Guide
+# track-reporting-date workflow — GitHub Project Setup Guide
 
 ## Project
 
