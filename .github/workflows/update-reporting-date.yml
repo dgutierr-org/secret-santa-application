@@ -128,12 +128,12 @@ jobs:
             TIME_SPENT=$(get_field    "$item" "Time Spent")
             REPORTING_LOG=$(get_field "$item" "Reporting Log")
 
-            # Parse tracked field values from the last entry in the log
+            # Parse tracked field values from the latest (first) entry in the log
             if [ -z "$REPORTING_LOG" ]; then
               LAST_STATUS="" LAST_PRIORITY="" LAST_ESTIMATE=""
               LAST_REMAINING_WORK="" LAST_TIME_SPENT=""
             else
-              LAST_ENTRY=$(echo "$REPORTING_LOG" | grep -v '^[[:space:]]*$' | tail -1)
+              LAST_ENTRY=$(echo "$REPORTING_LOG" | grep -v '^[[:space:]]*$' | head -1)
               LAST_STATUS=$(echo        "$LAST_ENTRY" | cut -d'|' -f2 | xargs)
               LAST_PRIORITY=$(echo      "$LAST_ENTRY" | cut -d'|' -f3 | xargs)
               LAST_ESTIMATE=$(echo      "$LAST_ENTRY" | cut -d'|' -f4 | xargs)
@@ -155,14 +155,14 @@ jobs:
               continue
             fi
 
-            echo "  → Change detected. Updating 'Reporting Date' and appending to 'Reporting Log'."
+            echo "  → Change detected. Updating 'Reporting Date' and prepending to 'Reporting Log'."
 
-            # Build the new log entry and append it
+            # Build the new log entry and prepend it (newest entry first)
             NEW_ENTRY="${TODAY} | ${STATUS} | ${PRIORITY} | ${ESTIMATE} | ${REMAINING_WORK} | ${TIME_SPENT}"
             if [ -z "$REPORTING_LOG" ]; then
               NEW_LOG="$NEW_ENTRY"
             else
-              NEW_LOG="${REPORTING_LOG}"$'\n'"${NEW_ENTRY}"
+              NEW_LOG="${NEW_ENTRY}"$'\n'"${REPORTING_LOG}"
             fi
 
             # Update 'Reporting Date' to today
