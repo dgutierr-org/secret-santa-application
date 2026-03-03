@@ -15,7 +15,7 @@ on:
 # The default GITHUB_TOKEN does not have write access to organization-level projects.
 
 jobs:
-  update-reporting-date:
+  track-reporting-date:
     name: Check and update 'Reporting Date'
     runs-on: ubuntu-latest
     env:

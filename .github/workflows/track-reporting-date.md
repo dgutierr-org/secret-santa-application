@@ -1,4 +1,4 @@
-# update-reporting-date workflow — Setup Guide
+# track-reporting-date workflow — Setup Guide
 
 ## What it does
 
