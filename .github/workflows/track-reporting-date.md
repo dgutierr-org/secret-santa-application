@@ -2,12 +2,12 @@
 
 ## What it does
 
-Runs every 5 minutes and checks **all** project items. For each item it compares the current values of the five tracked fields (**Status**, **Priority**, **Estimate**, **Remaining Work**, **Time Spent**) against the last entry in the item's **`Reporting Log`** field. If a change is detected (or the log is empty), the workflow:
+Runs **daily at 05:00 UTC** and checks **all** project items. For each item it compares the current values of the five tracked fields (**Status**, **Priority**, **Estimate**, **Remaining Work**, **Time Spent**) against the last entry in the item's **`Reporting Log`** field. If a change is detected (or the log is empty), the workflow:
 
 1. Sets **`Reporting Date`** to today
-2. Appends a new entry to **`Reporting Log`** in the format:
+2. Prepends a new entry to **`Reporting Log`** in the format:
    ```
-   YYYY-MM-DD | Status | Priority | Estimate | Remaining Work | Time Spent
+   YYYY-MM-DD, Status, Priority, Estimate, Remaining Work, Time Spent
    ```
 
 No action is taken when non-tracked fields change (e.g. title, assignee).
@@ -23,7 +23,7 @@ In **`https://github.com/orgs/dgutierr-org/projects/1`**, make sure the followin
 | Field name       | Type   | Purpose                                                        |
 |------------------|--------|----------------------------------------------------------------|
 | `Reporting Date` | Date   | Set to today when a tracked field changes                      |
-| `Reporting Log`  | Text   | Append-only log of tracked field values, one entry per change  |
+| `Reporting Log`  | Text   | Log of tracked field values, newest entry first, max 5 entries |
 
 ### 2. Create a Personal Access Token (PAT)
 
@@ -48,4 +48,4 @@ In **`https://github.com/orgs/dgutierr-org/projects/1`**, make sure the followin
 
 ---
 
-Once all steps are done, the workflow will run automatically every 5 minutes and update `Reporting Date` and `Reporting Log` whenever a tracked field is changed.
+Once all steps are done, the workflow will run automatically every day at 05:00 UTC and update `Reporting Date` and `Reporting Log` whenever a tracked field has changed since the last run.

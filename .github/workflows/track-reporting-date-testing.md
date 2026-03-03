@@ -15,7 +15,7 @@ Make sure the setup from the guide is complete:
 2. **Pick any issue/item** in the project and change one of the tracked fields:
    - Status, Priority, Estimate, Remaining Work, or Time Spent
 
-3. **Wait up to 5 minutes** for the scheduled workflow to trigger
+3. **Wait until 05:00 UTC** for the scheduled workflow to trigger, or use the manual trigger below to run it immediately
 
 4. **Check the workflow ran** → go to your repository → **Actions** tab → open the latest run of `Track Reporting Date on Field Changes` and inspect the logs. You should see the item listed with a change detected and an update confirmation.
 
@@ -25,7 +25,7 @@ Make sure the setup from the guide is complete:
 
 ---
 
-## Manual trigger (skip the 5-minute wait)
+## Manual trigger (skip the scheduled wait)
 
 1. Go to **Actions → Track Reporting Date on Field Changes → Run workflow**
 2. Click **"Run workflow"**
