@@ -1,77 +1,185 @@
 name: Update Reporting Date on Project Item Changes
 
 on:
-  projects_v2_item:
-    types: [edited]
+  schedule:
+    - cron: '*/2 * * * *'
+  workflow_dispatch:
 
-# Requires a PAT with 'project' scope stored as secret GH_TOKEN.
-# The default GITHUB_TOKEN does not have write access to user-level projects.
+# Requires a PAT with 'project' and 'read:org' scopes stored as secret GH_TOKEN.
+# The default GITHUB_TOKEN does not have write access to organization-level projects.
 
 jobs:
   update-reporting-date:
-    name: Set 'Reporting date' to today
+    name: Check and update 'Reporting date'
     runs-on: ubuntu-latest
-    # Only run when one of the tracked fields is changed
-    if: |
-      contains(
-        fromJSON('["Status", "Priority", "Estimate", "Remaining Work", "Time Spent"]'),
-        github.event.changes.field_value.field_name
-      )
+    env:
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      PROJECT_OWNER: dgutierr-org
+      PROJECT_NUMBER: 1
+      LOOKBACK_MINUTES: 3
     steps:
-      - name: Set 'Reporting date' field to today
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          PROJECT_ID: ${{ github.event.projects_v2_item.project_node_id }}
-          ITEM_ID: ${{ github.event.projects_v2_item.node_id }}
+      - name: Update 'Reporting date' for items with changed tracked fields
         run: |
+          set -e
+
           TODAY=$(date -u +%Y-%m-%d)
+          CUTOFF_EPOCH=$(date -u -d "${LOOKBACK_MINUTES} minutes ago" +%s)
 
-          echo "Field '${CHANGED_FIELD}' changed — updating 'Reporting date' to $TODAY"
+          # Extract a field value from a project item JSON blob by field name.
+          # Handles text, number, single-select and date field types.
+          get_field() {
+            local item_json="$1"
+            local field_name="$2"
+            echo "$item_json" | jq -r --arg n "$field_name" '
+              [ .fieldValues.nodes[] | select(.field.name == $n) ] |
+              if length == 0 then ""
+              else .[0] |
+                if .text != null then .text
+                elif .number != null then (.number | tostring)
+                elif .["name"] != null then .["name"]
+                elif .date != null then .date
+                else ""
+                end
+              end
+            '
+          }
 
-          # Resolve the 'Reporting date' field ID from the project
-          REPORTING_DATE_FIELD_ID=$(gh api graphql -f query='
-            query($projectId: ID!) {
-              node(id: $projectId) {
-                ... on ProjectV2 {
+          # Fetch all project items along with their field metadata and values
+          RESPONSE=$(gh api graphql -f query='
+            query($owner: String!, $number: Int!) {
+              organization(login: $owner) {
+                projectV2(number: $number) {
+                  id
                   fields(first: 30) {
                     nodes {
                       ... on ProjectV2Field {
                         id
                         name
                       }
+                      ... on ProjectV2SingleSelectField {
+                        id
+                        name
+                      }
+                    }
+                  }
+                  items(first: 100) {
+                    nodes {
+                      id
+                      updatedAt
+                      fieldValues(first: 20) {
+                        nodes {
+                          ... on ProjectV2ItemFieldTextValue {
+                            text
+                            field { ... on ProjectV2Field { name } }
+                          }
+                          ... on ProjectV2ItemFieldNumberValue {
+                            number
+                            field { ... on ProjectV2Field { name } }
+                          }
+                          ... on ProjectV2ItemFieldSingleSelectValue {
+                            name
+                            field { ... on ProjectV2SingleSelectField { name } }
+                          }
+                          ... on ProjectV2ItemFieldDateValue {
+                            date
+                            field { ... on ProjectV2Field { name } }
+                          }
+                        }
+                      }
                     }
                   }
                 }
               }
             }
-          ' -f projectId="$PROJECT_ID" \
-            --jq '.data.node.fields.nodes[] | select(.name == "Reporting date") | .id')
+          ' -f owner="$PROJECT_OWNER" -F number=$PROJECT_NUMBER)
+
+          PROJECT_ID=$(echo "$RESPONSE" | jq -r '.data.organization.projectV2.id')
+          REPORTING_DATE_FIELD_ID=$(echo "$RESPONSE" | jq -r '.data.organization.projectV2.fields.nodes[] | select(.name == "Reporting date") | .id')
+          REPORTING_HASH_FIELD_ID=$(echo "$RESPONSE" | jq -r '.data.organization.projectV2.fields.nodes[] | select(.name == "Reporting Hash") | .id')
 
           if [ -z "$REPORTING_DATE_FIELD_ID" ]; then
-            echo "Error: 'Reporting date' field not found in project $PROJECT_ID."
+            echo "Error: 'Reporting date' field not found in project."
+            exit 1
+          fi
+          if [ -z "$REPORTING_HASH_FIELD_ID" ]; then
+            echo "Error: 'Reporting Hash' field not found in project."
             exit 1
           fi
 
-          echo "Resolved 'Reporting date' field ID: $REPORTING_DATE_FIELD_ID"
+          echo "Project ID             : $PROJECT_ID"
+          echo "Reporting date field ID: $REPORTING_DATE_FIELD_ID"
+          echo "Reporting Hash field ID: $REPORTING_HASH_FIELD_ID"
+          echo "Processing items updated since: $(date -u -d "${LOOKBACK_MINUTES} minutes ago")"
 
-          # Update the 'Reporting date' field value to today
-          gh api graphql -f query='
-            mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $date: Date!) {
-              updateProjectV2ItemFieldValue(input: {
-                projectId: $projectId
-                itemId: $itemId
-                fieldId: $fieldId
-                value: { date: $date }
-              }) {
-                projectV2Item {
-                  id
-                }
+          UPDATED_COUNT=0
+          SKIPPED_COUNT=0
+
+          while IFS= read -r item; do
+            ITEM_ID=$(echo "$item" | jq -r '.id')
+            UPDATED_AT=$(echo "$item" | jq -r '.updatedAt')
+            UPDATED_EPOCH=$(date -u -d "$UPDATED_AT" +%s)
+
+            # Skip items outside the lookback window
+            if [ "$UPDATED_EPOCH" -lt "$CUTOFF_EPOCH" ]; then
+              continue
+            fi
+
+            echo ""
+            echo "Item $ITEM_ID (updatedAt: $UPDATED_AT)"
+
+            STATUS=$(get_field "$item" "Status")
+            PRIORITY=$(get_field "$item" "Priority")
+            ESTIMATE=$(get_field "$item" "Estimate")
+            REMAINING_WORK=$(get_field "$item" "Remaining Work")
+            TIME_SPENT=$(get_field "$item" "Time Spent")
+            STORED_HASH=$(get_field "$item" "Reporting Hash")
+
+            # Compute hash of the tracked fields in a fixed order
+            HASH_INPUT="${STATUS}|${PRIORITY}|${ESTIMATE}|${REMAINING_WORK}|${TIME_SPENT}"
+            CURRENT_HASH=$(echo -n "$HASH_INPUT" | sha256sum | cut -d' ' -f1)
+
+            echo "  Tracked fields : $HASH_INPUT"
+            echo "  Current hash   : $CURRENT_HASH"
+            echo "  Stored hash    : $STORED_HASH"
+
+            if [ "$CURRENT_HASH" = "$STORED_HASH" ]; then
+              echo "  → Hashes match — no tracked field changed. Skipping."
+              SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
+              continue
+            fi
+
+            echo "  → Hash mismatch — updating 'Reporting date' to $TODAY and 'Reporting Hash'."
+
+            # Update 'Reporting date' to today
+            gh api graphql -f query='
+              mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $date: Date!) {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: $projectId
+                  itemId: $itemId
+                  fieldId: $fieldId
+                  value: { date: $date }
+                }) { projectV2Item { id } }
               }
-            }
-          ' \
-            -f projectId="$PROJECT_ID" \
-            -f itemId="$ITEM_ID" \
-            -f fieldId="$REPORTING_DATE_FIELD_ID" \
-            -f date="$TODAY"
+            ' -f projectId="$PROJECT_ID" -f itemId="$ITEM_ID" \
+              -f fieldId="$REPORTING_DATE_FIELD_ID" -f date="$TODAY"
 
-          echo "Successfully set 'Reporting date' to $TODAY for item $ITEM_ID"
+            # Update 'Reporting Hash' to the current hash
+            gh api graphql -f query='
+              mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $text: String!) {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: $projectId
+                  itemId: $itemId
+                  fieldId: $fieldId
+                  value: { text: $text }
+                }) { projectV2Item { id } }
+              }
+            ' -f projectId="$PROJECT_ID" -f itemId="$ITEM_ID" \
+              -f fieldId="$REPORTING_HASH_FIELD_ID" -f text="$CURRENT_HASH"
+
+            echo "  → Done."
+            UPDATED_COUNT=$((UPDATED_COUNT + 1))
+
+          done < <(echo "$RESPONSE" | jq -c '.data.organization.projectV2.items.nodes[]')
+
+          echo ""
+          echo "Summary: $UPDATED_COUNT item(s) updated, $SKIPPED_COUNT item(s) skipped."

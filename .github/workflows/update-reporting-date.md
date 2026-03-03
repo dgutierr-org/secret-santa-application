@@ -2,17 +2,24 @@
 
 ## What it does
 
-Automatically sets the `Reporting date` field to today in the GitHub Project whenever any of the following fields are edited on a project item: **Status**, **Priority**, **Estimate**, **Remaining Work**, **Time Spent**.
+Runs every 2 minutes and checks all project items updated in the last 3 minutes. For each recently updated item it computes a SHA-256 hash of the five tracked fields (**Status**, **Priority**, **Estimate**, **Remaining Work**, **Time Spent**) and compares it against the value stored in the **`Reporting Hash`** field. If the hashes differ, one of the tracked fields has changed and **`Reporting date`** is set to today. The new hash is then saved back to **`Reporting Hash`** for the next comparison.
 
-No action is taken for changes to other fields or for repository issue changes.
-
-> **Note:** The `projects_v2_item` event that triggers this workflow is only available for **organization-level projects**. The project must be owned by a GitHub organization (not a personal account). This workflow is configured for `https://github.com/orgs/dgutierr-org/projects/1`.
+No action is taken when non-tracked fields change (e.g. title, assignee).
 
 ---
 
 ## Setup
 
-### 1. Create a Personal Access Token (PAT)
+### 1. Add the required fields to the project
+
+In **`https://github.com/orgs/dgutierr-org/projects/1`**, make sure the following fields exist:
+
+| Field name       | Type   | Purpose                                      |
+|------------------|--------|----------------------------------------------|
+| `Reporting date` | Date   | Set to today when a tracked field changes    |
+| `Reporting Hash` | Text   | Stores the hash of the last known field state |
+
+### 2. Create a Personal Access Token (PAT)
 
 1. Go to **GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)**
 2. Click **"Generate new token (classic)"**
@@ -24,7 +31,7 @@ No action is taken for changes to other fields or for repository issue changes.
 
 > Why not use the default `GITHUB_TOKEN`? That token is automatically created per workflow run and is scoped to the repository only. It cannot read or write fields on organization-level GitHub Projects v2.
 
-### 2. Store the token as a repository secret
+### 3. Store the token as a repository secret
 
 1. Go to your repository: **`secret-santa-application` → Settings → Secrets and variables → Actions**
 2. Click **"New repository secret"**
@@ -33,14 +40,6 @@ No action is taken for changes to other fields or for repository issue changes.
    - **Secret**: paste the token you copied above
 4. Click **"Add secret"**
 
-### 3. Link the repository to the organization project
-
-The `projects_v2_item` event only fires for projects that the repository is associated with. To link it:
-
-1. Go to **`https://github.com/orgs/dgutierr-org/projects/1`**
-2. Open the project **Settings → Manage access**
-3. Add the `secret-santa-application` repository, or add it from the issue/PR side panel inside the project
-
 ---
 
-Once all three steps are done, the workflow will trigger automatically whenever a tracked field is edited in the project.
+Once all steps are done, the workflow will run automatically every 2 minutes and update `Reporting date` whenever a tracked field is changed.
