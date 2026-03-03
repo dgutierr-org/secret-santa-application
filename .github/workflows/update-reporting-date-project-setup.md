@@ -1,0 +1,64 @@
+# update-reporting-date workflow — GitHub Project Setup Guide
+
+## Project
+
+**URL:** `https://github.com/orgs/dgutierr-org/projects/1`
+
+---
+
+## Required fields
+
+The workflow reads and writes specific fields on each project item. All field names are **case-sensitive** and must match exactly.
+
+### Tracked fields (read by the workflow)
+
+Changes to any of these fields trigger an update to `Reporting Date` and a new entry in `Reporting Log`.
+
+| Field name       | Type          | Notes                                      |
+|------------------|---------------|--------------------------------------------|
+| `Status`         | Single select | e.g. Backlog, In Progress, Done            |
+| `Priority`       | Single select | e.g. Low, Medium, High                     |
+| `Estimate`       | Number        | Estimated effort or story points           |
+| `Remaining Work` | Number        | Remaining effort                           |
+| `Time Spent`     | Number        | Time already spent                         |
+
+### Workflow-managed fields (written by the workflow)
+
+These fields are updated automatically and should not be edited manually.
+
+| Field name       | Type   | Purpose                                                       |
+|------------------|--------|---------------------------------------------------------------|
+| `Reporting Date` | Date   | Set to today whenever a tracked field changes                 |
+| `Reporting Log`  | Text   | Append-only log; one entry per change in the format below     |
+
+#### Reporting Log entry format
+
+Each entry is a newline-separated row:
+
+```
+YYYY-MM-DD | Status | Priority | Estimate | Remaining Work | Time Spent
+```
+
+Example:
+```
+2026-03-01 | Backlog | High | 8 | 8 | 0
+2026-03-03 | In Progress | High | 8 | 5 | 3
+```
+
+---
+
+## How to add a field to the project
+
+1. Go to **`https://github.com/orgs/dgutierr-org/projects/1`**
+2. Click **"+"** at the right end of the column headers → **"New field"**
+3. Enter the field name and select the correct type
+4. Click **"Save"**
+
+---
+
+## Cleanup
+
+If the `Reporting Hash` field was created during a previous version of this workflow, it is no longer needed and can be safely removed:
+
+1. Go to the project **Settings → Fields**
+2. Find `Reporting Hash` and delete it
