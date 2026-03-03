@@ -1,8 +1,16 @@
 name: Update Reporting Date on Project Item Changes
 
+# ---------------------------------------------------------------------------
+# Schedule configuration
+# NOTE: GitHub Actions does not support variables in cron expressions.
+#       To change the polling interval, update BOTH values below manually:
+#         - cron: how often the workflow runs (minimum every 5 minutes)
+#         - LOOKBACK_MINUTES: must be slightly longer than the cron interval
+#           to avoid missing updates at the boundary (e.g. interval=5 → lookback=6)
+# ---------------------------------------------------------------------------
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '*/5 * * * *'   # <-- change polling interval here
   workflow_dispatch:
 
 # Requires a PAT with 'project' and 'read:org' scopes stored as secret GH_TOKEN.
@@ -16,7 +24,7 @@ jobs:
       GH_TOKEN: ${{ secrets.GH_TOKEN }}
       PROJECT_OWNER: dgutierr-org
       PROJECT_NUMBER: 1
-      LOOKBACK_MINUTES: 6
+      LOOKBACK_MINUTES: 6   # <-- change lookback window here
     steps:
       - name: Update 'Reporting Date' for items with changed tracked fields
         run: |
