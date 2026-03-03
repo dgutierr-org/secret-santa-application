@@ -29,21 +29,22 @@ These fields are updated automatically and should not be edited manually.
 | Field name       | Type   | Purpose                                                       |
 |------------------|--------|---------------------------------------------------------------|
 | `Reporting Date` | Date   | Set to today whenever a tracked field changes                 |
-| `Reporting Log`  | Text   | Log of changes, newest entry first, one entry per change      |
+| `Reporting Log`  | Text   | Log of changes, newest entry first, max 5 entries             |
 
 #### Reporting Log entry format
 
-Each entry is a newline-separated row. Entries are ordered **newest first**, so the most recent change is always at the top:
+Entries are separated by `|`, ordered **newest first**. Each entry uses `,` to separate field values:
 
 ```
-YYYY-MM-DD | Status | Priority | Estimate | Remaining Work | Time Spent
+DATE,Status,Priority,Estimate,Remaining Work,Time Spent
 ```
 
-Example:
+Multiple entries example (newest → oldest, max 5):
 ```
-2026-03-03 | In Progress | High | 8 | 5 | 3
-2026-03-01 | Backlog | High | 8 | 8 | 0
+2026-03-03,In Progress,High,8,5,3|2026-03-01,Backlog,High,8,8,0
 ```
+
+The oldest entry is automatically discarded when the log exceeds 5 entries.
 
 ---
 
