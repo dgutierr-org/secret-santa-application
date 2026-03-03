@@ -162,8 +162,7 @@ jobs:
             if [ -z "$REPORTING_LOG" ]; then
               NEW_LOG="$NEW_ENTRY"
             else
-              NEW_LOG="${REPORTING_LOG}
-${NEW_ENTRY}"
+              NEW_LOG="${REPORTING_LOG}"$'\n'"${NEW_ENTRY}"
             fi
 
             # Update 'Reporting Date' to today
