@@ -21,7 +21,7 @@ Make sure the setup from the guide is complete:
 
 5. **Verify the result** → go back to the project item and confirm:
    - `Reporting Date` is set to today
-   - `Reporting Log` has a new entry in the format `YYYY-MM-DD | Status | Priority | Estimate | Remaining Work | Time Spent`
+   - `Reporting Log` has a new entry prepended in the format `YYYY-MM-DD,Status,Priority,Estimate,Remaining Work,Time Spent`, separated from older entries by `|`, with a maximum of 5 entries total
 
 ---
 
