@@ -191,8 +191,29 @@ jobs:
                   cat /tmp/jira_resp.json
                 fi
 
-                # Log Time Spent as a worklog entry if provided
+                # Override Time Spent: delete all existing worklogs, then add one with the exact value.
+                # This ensures JIRA's total time spent matches the GH value rather than accumulating.
                 if [ -n "$JIRA_TIME_SPENT" ]; then
+                  # Fetch all existing worklog IDs
+                  WL_LIST=$(curl -s \
+                    -H "Authorization: Bearer ${JIRA_API_TOKEN}" \
+                    "${JIRA_ISSUE_URL}/worklog")
+                  WORKLOG_IDS=$(echo "$WL_LIST" | jq -r '.worklogs[].id // empty')
+
+                  # Delete each existing worklog
+                  for WL_ID in $WORKLOG_IDS; do
+                    DEL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+                      -H "Authorization: Bearer ${JIRA_API_TOKEN}" \
+                      -X DELETE \
+                      "${JIRA_ISSUE_URL}/worklog/${WL_ID}")
+                    if [ "$DEL_STATUS" -ge 200 ] && [ "$DEL_STATUS" -lt 300 ]; then
+                      echo "  → Deleted existing worklog $WL_ID."
+                    else
+                      echo "  → Warning: Failed to delete worklog $WL_ID (HTTP $DEL_STATUS)."
+                    fi
+                  done
+
+                  # Add a single worklog with the exact Time Spent value
                   WL_STATUS=$(curl -s -o /tmp/jira_wl.json -w "%{http_code}" \
                     -H "Authorization: Bearer ${JIRA_API_TOKEN}" \
                     -X POST \
@@ -200,9 +221,9 @@ jobs:
                     -d "$(jq -n --arg ts "$JIRA_TIME_SPENT" '{timeSpent: $ts}')" \
                     "${JIRA_ISSUE_URL}/worklog")
                   if [ "$WL_STATUS" -ge 200 ] && [ "$WL_STATUS" -lt 300 ]; then
-                    echo "  → Time Spent ($JIRA_TIME_SPENT) logged to JIRA worklog."
+                    echo "  → Time Spent set to $JIRA_TIME_SPENT in JIRA worklog."
                   else
-                    echo "  → Warning: Failed to log Time Spent to JIRA (HTTP $WL_STATUS)"
+                    echo "  → Warning: Failed to set Time Spent in JIRA (HTTP $WL_STATUS)"
                     cat /tmp/jira_wl.json
                   fi
                 fi
