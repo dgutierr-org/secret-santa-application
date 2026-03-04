@@ -192,39 +192,49 @@ jobs:
                 fi
 
                 # Override Time Spent: delete all existing worklogs, then add one with the exact value.
-                # This ensures JIRA's total time spent matches the GH value rather than accumulating.
+                # Uses adjustEstimate=leave so estimate fields are not auto-adjusted by JIRA.
                 if [ -n "$JIRA_TIME_SPENT" ]; then
-                  # Fetch all existing worklog IDs
-                  WL_LIST=$(curl -s \
+                  # Fetch all existing worklogs (check HTTP status to catch silent auth failures)
+                  WL_LIST_STATUS=$(curl -s -o /tmp/jira_wl_list.json -w "%{http_code}" \
                     -H "Authorization: Bearer ${JIRA_API_TOKEN}" \
                     "${JIRA_ISSUE_URL}/worklog")
-                  WORKLOG_IDS=$(echo "$WL_LIST" | jq -r '.worklogs[].id // empty')
+                  echo "  → GET worklogs HTTP $WL_LIST_STATUS"
 
-                  # Delete each existing worklog
-                  for WL_ID in $WORKLOG_IDS; do
-                    DEL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+                  if [ "$WL_LIST_STATUS" -ge 200 ] && [ "$WL_LIST_STATUS" -lt 300 ]; then
+                    WORKLOG_IDS=$(jq -r '.worklogs[].id // empty' /tmp/jira_wl_list.json)
+                    WORKLOG_COUNT=$(jq -r '.total // 0' /tmp/jira_wl_list.json)
+                    echo "  → Found $WORKLOG_COUNT existing worklog(s)."
+
+                    # Delete each existing worklog (adjustEstimate=leave keeps estimates unchanged)
+                    for WL_ID in $WORKLOG_IDS; do
+                      DEL_STATUS=$(curl -s -o /tmp/jira_wl_del.json -w "%{http_code}" \
+                        -H "Authorization: Bearer ${JIRA_API_TOKEN}" \
+                        -X DELETE \
+                        "${JIRA_ISSUE_URL}/worklog/${WL_ID}?adjustEstimate=leave")
+                      if [ "$DEL_STATUS" -ge 200 ] && [ "$DEL_STATUS" -lt 300 ]; then
+                        echo "  → Deleted worklog $WL_ID (HTTP $DEL_STATUS)."
+                      else
+                        echo "  → Warning: Failed to delete worklog $WL_ID (HTTP $DEL_STATUS)."
+                        cat /tmp/jira_wl_del.json
+                      fi
+                    done
+
+                    # Add a single worklog with the exact Time Spent value
+                    WL_STATUS=$(curl -s -o /tmp/jira_wl.json -w "%{http_code}" \
                       -H "Authorization: Bearer ${JIRA_API_TOKEN}" \
-                      -X DELETE \
-                      "${JIRA_ISSUE_URL}/worklog/${WL_ID}")
-                    if [ "$DEL_STATUS" -ge 200 ] && [ "$DEL_STATUS" -lt 300 ]; then
-                      echo "  → Deleted existing worklog $WL_ID."
+                      -X POST \
+                      -H "Content-Type: application/json" \
+                      -d "$(jq -n --arg ts "$JIRA_TIME_SPENT" '{timeSpent: $ts}')" \
+                      "${JIRA_ISSUE_URL}/worklog?adjustEstimate=leave")
+                    if [ "$WL_STATUS" -ge 200 ] && [ "$WL_STATUS" -lt 300 ]; then
+                      echo "  → Time Spent set to $JIRA_TIME_SPENT (HTTP $WL_STATUS)."
                     else
-                      echo "  → Warning: Failed to delete worklog $WL_ID (HTTP $DEL_STATUS)."
+                      echo "  → Warning: Failed to set Time Spent in JIRA (HTTP $WL_STATUS)"
+                      cat /tmp/jira_wl.json
                     fi
-                  done
-
-                  # Add a single worklog with the exact Time Spent value
-                  WL_STATUS=$(curl -s -o /tmp/jira_wl.json -w "%{http_code}" \
-                    -H "Authorization: Bearer ${JIRA_API_TOKEN}" \
-                    -X POST \
-                    -H "Content-Type: application/json" \
-                    -d "$(jq -n --arg ts "$JIRA_TIME_SPENT" '{timeSpent: $ts}')" \
-                    "${JIRA_ISSUE_URL}/worklog")
-                  if [ "$WL_STATUS" -ge 200 ] && [ "$WL_STATUS" -lt 300 ]; then
-                    echo "  → Time Spent set to $JIRA_TIME_SPENT in JIRA worklog."
                   else
-                    echo "  → Warning: Failed to set Time Spent in JIRA (HTTP $WL_STATUS)"
-                    cat /tmp/jira_wl.json
+                    echo "  → Warning: Failed to fetch worklogs for $EXTERNAL_REF (HTTP $WL_LIST_STATUS). Skipping Time Spent update."
+                    cat /tmp/jira_wl_list.json
                   fi
                 fi
               fi
