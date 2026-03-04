@@ -54,10 +54,11 @@ If you want changes to be synced to JIRA tickets, add the `External Reference` f
 
 | Secret name      | Value                                                                 |
 |------------------|-----------------------------------------------------------------------|
-| `JIRA_USER`      | Your JIRA username or email address                                   |
-| `JIRA_API_TOKEN` | A JIRA API token (generate one at `https://id.atlassian.com/manage-profile/security/api-tokens`) |
+| `JIRA_API_TOKEN` | A JIRA Personal Access Token (PAT) — generate one in JIRA at **Profile → Personal Access Tokens → Create token** |
 
-To add each secret: **`secret-santa-application` → Settings → Secrets and variables → Actions → New repository secret**.
+To add the secret: **`secret-santa-application` → Settings → Secrets and variables → Actions → New repository secret**.
+
+> **Note:** `issues.redhat.com` runs JIRA Data Center, which uses PAT-based Bearer token authentication. Basic auth (username + password/API key) is not supported.
 
 When `External Reference` is set on a project item (e.g. `SRVLOGIC-774`), the workflow will:
 - Update **Priority** and **time tracking** (Estimate → original estimate, Remaining Work → remaining estimate) on the JIRA ticket at `https://issues.redhat.com/browse/SRVLOGIC-774`
@@ -65,7 +66,7 @@ When `External Reference` is set on a project item (e.g. `SRVLOGIC-774`), the wo
 
 > **Note:** Time Spent is added as a worklog on every detected change, not as an absolute value. JIRA calculates total time spent from the sum of all worklog entries.
 
-If `JIRA_USER` or `JIRA_API_TOKEN` are not set, the JIRA sync step is skipped silently.
+If `JIRA_API_TOKEN` is not set, the JIRA sync step is skipped silently.
 
 ---
 
