@@ -14,13 +14,14 @@ The workflow reads and writes specific fields on each project item. All field na
 
 Changes to any of these fields trigger an update to `Reporting Date` and a new entry in `Reporting Log`.
 
-| Field name       | Type          | Notes                                      |
-|------------------|---------------|--------------------------------------------|
-| `Status`         | Single select | e.g. Backlog, In Progress, Done            |
-| `Priority`       | Single select | e.g. Low, Medium, High                     |
-| `Estimate`       | Number        | Estimated effort or story points           |
-| `Remaining Work` | Number        | Remaining effort                           |
-| `Time Spent`     | Number        | Time already spent                         |
+| Field name         | Type          | Notes                                                                                     |
+|--------------------|---------------|-------------------------------------------------------------------------------------------|
+| `Status`           | Single select | e.g. Backlog, In Progress, Done                                                           |
+| `Priority`         | Single select | e.g. Low, Medium, High                                                                    |
+| `Estimate`         | Number        | Estimated effort or story points                                                          |
+| `Remaining Work`   | Number        | Remaining effort                                                                          |
+| `Time Spent`       | Number        | Time already spent                                                                        |
+| `External Reference` | Text        | Optional JIRA ticket ID (e.g. `SRVLOGIC-774`). When set, changes are synced to JIRA at `https://issues.redhat.com/browse/{ID}` |
 
 ### Workflow-managed fields (written by the workflow)
 

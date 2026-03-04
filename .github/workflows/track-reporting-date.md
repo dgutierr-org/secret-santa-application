@@ -48,6 +48,27 @@ In **`https://github.com/orgs/dgutierr-org/projects/1`**, make sure the followin
 
 ---
 
+### 4. (Optional) Configure JIRA sync
+
+If you want changes to be synced to JIRA tickets, add the `External Reference` field to the project (see the [GitHub Project Setup Guide](track-reporting-date-project-setup.md)) and store two additional secrets:
+
+| Secret name      | Value                                                                 |
+|------------------|-----------------------------------------------------------------------|
+| `JIRA_USER`      | Your JIRA username or email address                                   |
+| `JIRA_API_TOKEN` | A JIRA API token (generate one at `https://id.atlassian.com/manage-profile/security/api-tokens`) |
+
+To add each secret: **`secret-santa-application` → Settings → Secrets and variables → Actions → New repository secret**.
+
+When `External Reference` is set on a project item (e.g. `SRVLOGIC-774`), the workflow will:
+- Update **Priority** and **time tracking** (Estimate → original estimate, Remaining Work → remaining estimate) on the JIRA ticket at `https://issues.redhat.com/browse/SRVLOGIC-774`
+- Log **Time Spent** as a new worklog entry on the JIRA ticket
+
+> **Note:** Time Spent is added as a worklog on every detected change, not as an absolute value. JIRA calculates total time spent from the sum of all worklog entries.
+
+If `JIRA_USER` or `JIRA_API_TOKEN` are not set, the JIRA sync step is skipped silently.
+
+---
+
 Once all steps are done, the workflow will run automatically every day at 05:00 UTC and update `Reporting Date` and `Reporting Log` whenever a tracked field has changed since the last run.
 
 ---
