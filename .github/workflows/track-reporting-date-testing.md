@@ -55,7 +55,7 @@ Change a field that is **not** in the tracked list (e.g. title or assignee). Aft
 - **Workflow fails with auth error** → the `GH_TOKEN` secret is missing or the PAT doesn't have `project` and `read:org` scopes
 - **`Reporting Date` field not found** → the field name in the project doesn't exactly match `Reporting Date` (case-sensitive)
 - **`Reporting Log` field not found** → the field name in the project doesn't exactly match `Reporting Log` (case-sensitive), or the field hasn't been created yet
-- **Item not processed** → the item may not appear in the first 100 results; increase the `items(first: 100)` limit in the workflow if the project has more than 100 items
+- **Item not processed** → the workflow paginates automatically (100 items per page); check the Actions log to see how many pages were fetched and confirm the item's page was processed
 - **JIRA update failed (HTTP 401)** → `JIRA_API_TOKEN` secret is missing, expired, or not a valid JIRA Personal Access Token (PAT); basic auth credentials will not work — a PAT is required
 - **JIRA update failed (HTTP 404)** → the ticket ID in `External Reference` does not exist or is not accessible with the provided credentials
 - **JIRA update failed (HTTP 400)** → a field value is in an unexpected format (e.g. Priority name doesn't match a valid JIRA priority, or time values are not in JIRA format such as `2h`, `1d`)
