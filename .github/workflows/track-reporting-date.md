@@ -49,3 +49,17 @@ In **`https://github.com/orgs/dgutierr-org/projects/1`**, make sure the followin
 ---
 
 Once all steps are done, the workflow will run automatically every day at 05:00 UTC and update `Reporting Date` and `Reporting Log` whenever a tracked field has changed since the last run.
+
+---
+
+## Why cron instead of GitHub project events?
+
+GitHub Actions does **not** natively support triggering workflows from GitHub Projects (v2) field changes. The available event triggers (`issues`, `pull_request`, `project_card`, etc.) only fire on classic Projects (v1) or on issue/PR metadata changes — not on custom project fields like `Status`, `Priority`, `Estimate`, etc.
+
+The only way to react to custom project field changes in GitHub Actions is via the **GitHub GraphQL API**, which is only accessible by polling. Hence the scheduled cron approach:
+
+1. The workflow runs on schedule and queries all project items via GraphQL.
+2. For each item, it compares the current field values against the last entry in `Reporting Log`.
+3. If anything changed since the last run, it updates `Reporting Date` and prepends a new entry to `Reporting Log`.
+
+This is a known limitation of GitHub Projects v2 — there is no `project_field_changed` webhook or Actions trigger available.
