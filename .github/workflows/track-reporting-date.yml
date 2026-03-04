@@ -191,46 +191,55 @@ jobs:
                   cat /tmp/jira_resp.json
                 fi
 
-                # Override Time Spent: delete all existing worklogs, then add one with the exact value.
-                # Uses adjustEstimate=leave so estimate fields are not auto-adjusted by JIRA.
+                # Override Time Spent: find the workflow-managed worklog by comment and PUT to update it.
+                # This avoids needing delete permission. A distinctive comment marks the managed entry.
+                # Uses adjustEstimate=leave so JIRA does not auto-adjust remaining estimate.
                 if [ -n "$JIRA_TIME_SPENT" ]; then
-                  # Fetch all existing worklogs (check HTTP status to catch silent auth failures)
+                  MANAGED_WL_COMMENT="[managed by track-reporting-date workflow]"
+
+                  # Fetch all existing worklogs
                   WL_LIST_STATUS=$(curl -s -o /tmp/jira_wl_list.json -w "%{http_code}" \
                     -H "Authorization: Bearer ${JIRA_API_TOKEN}" \
                     "${JIRA_ISSUE_URL}/worklog")
                   echo "  → GET worklogs HTTP $WL_LIST_STATUS"
 
                   if [ "$WL_LIST_STATUS" -ge 200 ] && [ "$WL_LIST_STATUS" -lt 300 ]; then
-                    WORKLOG_IDS=$(jq -r '.worklogs[].id // empty' /tmp/jira_wl_list.json)
-                    WORKLOG_COUNT=$(jq -r '.total // 0' /tmp/jira_wl_list.json)
-                    echo "  → Found $WORKLOG_COUNT existing worklog(s)."
+                    # Look for the workflow-managed worklog by its comment marker
+                    MANAGED_WL_ID=$(jq -r --arg c "$MANAGED_WL_COMMENT" \
+                      '.worklogs[] | select(.comment == $c) | .id' \
+                      /tmp/jira_wl_list.json | head -1)
 
-                    # Delete each existing worklog (adjustEstimate=leave keeps estimates unchanged)
-                    for WL_ID in $WORKLOG_IDS; do
-                      DEL_STATUS=$(curl -s -o /tmp/jira_wl_del.json -w "%{http_code}" \
+                    WL_PAYLOAD=$(jq -n --arg ts "$JIRA_TIME_SPENT" --arg c "$MANAGED_WL_COMMENT" \
+                      '{timeSpent: $ts, comment: $c}')
+
+                    if [ -n "$MANAGED_WL_ID" ]; then
+                      # Update the existing managed worklog in place (no accumulation, no delete needed)
+                      WL_STATUS=$(curl -s -o /tmp/jira_wl.json -w "%{http_code}" \
                         -H "Authorization: Bearer ${JIRA_API_TOKEN}" \
-                        -X DELETE \
-                        "${JIRA_ISSUE_URL}/worklog/${WL_ID}?adjustEstimate=leave")
-                      if [ "$DEL_STATUS" -ge 200 ] && [ "$DEL_STATUS" -lt 300 ]; then
-                        echo "  → Deleted worklog $WL_ID (HTTP $DEL_STATUS)."
+                        -X PUT \
+                        -H "Content-Type: application/json" \
+                        -d "$WL_PAYLOAD" \
+                        "${JIRA_ISSUE_URL}/worklog/${MANAGED_WL_ID}?adjustEstimate=leave")
+                      if [ "$WL_STATUS" -ge 200 ] && [ "$WL_STATUS" -lt 300 ]; then
+                        echo "  → Time Spent updated to $JIRA_TIME_SPENT on worklog $MANAGED_WL_ID (HTTP $WL_STATUS)."
                       else
-                        echo "  → Warning: Failed to delete worklog $WL_ID (HTTP $DEL_STATUS)."
-                        cat /tmp/jira_wl_del.json
+                        echo "  → Warning: Failed to update worklog $MANAGED_WL_ID (HTTP $WL_STATUS)"
+                        cat /tmp/jira_wl.json
                       fi
-                    done
-
-                    # Add a single worklog with the exact Time Spent value
-                    WL_STATUS=$(curl -s -o /tmp/jira_wl.json -w "%{http_code}" \
-                      -H "Authorization: Bearer ${JIRA_API_TOKEN}" \
-                      -X POST \
-                      -H "Content-Type: application/json" \
-                      -d "$(jq -n --arg ts "$JIRA_TIME_SPENT" '{timeSpent: $ts}')" \
-                      "${JIRA_ISSUE_URL}/worklog?adjustEstimate=leave")
-                    if [ "$WL_STATUS" -ge 200 ] && [ "$WL_STATUS" -lt 300 ]; then
-                      echo "  → Time Spent set to $JIRA_TIME_SPENT (HTTP $WL_STATUS)."
                     else
-                      echo "  → Warning: Failed to set Time Spent in JIRA (HTTP $WL_STATUS)"
-                      cat /tmp/jira_wl.json
+                      # No managed worklog yet — create one
+                      WL_STATUS=$(curl -s -o /tmp/jira_wl.json -w "%{http_code}" \
+                        -H "Authorization: Bearer ${JIRA_API_TOKEN}" \
+                        -X POST \
+                        -H "Content-Type: application/json" \
+                        -d "$WL_PAYLOAD" \
+                        "${JIRA_ISSUE_URL}/worklog?adjustEstimate=leave")
+                      if [ "$WL_STATUS" -ge 200 ] && [ "$WL_STATUS" -lt 300 ]; then
+                        echo "  → Time Spent set to $JIRA_TIME_SPENT (HTTP $WL_STATUS)."
+                      else
+                        echo "  → Warning: Failed to create Time Spent worklog (HTTP $WL_STATUS)"
+                        cat /tmp/jira_wl.json
+                      fi
                     fi
                   else
                     echo "  → Warning: Failed to fetch worklogs for $EXTERNAL_REF (HTTP $WL_LIST_STATUS). Skipping Time Spent update."
