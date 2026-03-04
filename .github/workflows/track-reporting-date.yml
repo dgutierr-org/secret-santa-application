@@ -31,6 +31,25 @@ jobs:
 
           TODAY=$(date -u +%Y-%m-%d)
 
+          # Convert a GH numeric value (in weeks) to JIRA time format.
+          # Convention: 1 week = 5 days = 40 hours.
+          # Examples: 2 → "2w", 0.4 → "2d", 0.1 → "4h".
+          # Returns empty string if input is empty.
+          weeks_to_jira() {
+            local val="$1"
+            [ -z "$val" ] && echo "" && return
+            awk -v v="$val" 'BEGIN {
+              h1000 = int(v * 40000 + 0.5)
+              if (h1000 % 40000 == 0) {
+                printf "%dw\n", h1000 / 40000
+              } else if (h1000 % 8000 == 0) {
+                printf "%dd\n", h1000 / 8000
+              } else {
+                printf "%dh\n", int(h1000 / 1000 + 0.5)
+              }
+            }'
+          }
+
           # Extract a field value from a project item JSON blob by field name.
           # Handles text, number, single-select and date field types.
           get_field() {
@@ -203,11 +222,17 @@ jobs:
               echo "  → Syncing to JIRA ticket: $EXTERNAL_REF"
               JIRA_ISSUE_URL="${JIRA_BASE_URL}/rest/api/2/issue/${EXTERNAL_REF}"
 
+              # Convert GH week-based values to JIRA time format (e.g. 2→"2w", 0.4→"2d", 0.1→"4h")
+              JIRA_ESTIMATE=$(weeks_to_jira "$ESTIMATE")
+              JIRA_REMAINING=$(weeks_to_jira "$REMAINING_WORK")
+              JIRA_TIME_SPENT=$(weeks_to_jira "$TIME_SPENT")
+              echo "  → JIRA values: priority=$PRIORITY, estimate=$JIRA_ESTIMATE, remaining=$JIRA_REMAINING, timeSpent=$JIRA_TIME_SPENT"
+
               # Build update payload: priority + time tracking (estimate and remaining work)
               JIRA_PAYLOAD=$(jq -n \
                 --arg priority       "$PRIORITY" \
-                --arg estimate       "$ESTIMATE" \
-                --arg remainingWork  "$REMAINING_WORK" \
+                --arg estimate       "$JIRA_ESTIMATE" \
+                --arg remainingWork  "$JIRA_REMAINING" \
                 '{
                   fields: {
                     priority:     {name: $priority},
@@ -230,15 +255,15 @@ jobs:
               fi
 
               # Log Time Spent as a worklog entry if provided
-              if [ -n "$TIME_SPENT" ]; then
+              if [ -n "$JIRA_TIME_SPENT" ]; then
                 WL_STATUS=$(curl -s -o /tmp/jira_wl.json -w "%{http_code}" \
                   -H "Authorization: Bearer ${JIRA_API_TOKEN}" \
                   -X POST \
                   -H "Content-Type: application/json" \
-                  -d "$(jq -n --arg ts "$TIME_SPENT" '{timeSpent: $ts}')" \
+                  -d "$(jq -n --arg ts "$JIRA_TIME_SPENT" '{timeSpent: $ts}')" \
                   "${JIRA_ISSUE_URL}/worklog")
                 if [ "$WL_STATUS" -ge 200 ] && [ "$WL_STATUS" -lt 300 ]; then
-                  echo "  → Time Spent ($TIME_SPENT) logged to JIRA worklog."
+                  echo "  → Time Spent ($JIRA_TIME_SPENT) logged to JIRA worklog."
                 else
                   echo "  → Warning: Failed to log Time Spent to JIRA (HTTP $WL_STATUS)"
                   cat /tmp/jira_wl.json
