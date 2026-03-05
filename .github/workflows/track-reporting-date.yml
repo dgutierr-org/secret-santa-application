@@ -76,8 +76,9 @@ jobs:
             local response="$1"
             while IFS= read -r item; do
               ITEM_ID=$(echo "$item" | jq -r '.id')
+              ISSUE_NUMBER=$(echo "$item" | jq -r '.content.number // ""')
               echo ""
-              echo "Item $ITEM_ID"
+              echo "Item $ITEM_ID${ISSUE_NUMBER:+ (GH #$ISSUE_NUMBER)}"
 
               STATUS=$(get_field         "$item" "Status")
               PRIORITY=$(get_field       "$item" "Priority")
@@ -197,22 +198,30 @@ jobs:
                 #    GET JIRA issue timespent, compute GH - JIRA, POST a new worklog for the difference.
                 # GH stores time in weeks (1w = 5d = 40h); JIRA stores timespent in seconds.
                 if [ -n "$JIRA_TIME_SPENT" ]; then
-                  MANAGED_WL_COMMENT="[managed by track-reporting-date workflow]"
+                  # Build worklog comments referencing the GH issue number when available
+                  if [ -n "$ISSUE_NUMBER" ]; then
+                    WL_COPY_COMMENT="Copied time spent from GH #${ISSUE_NUMBER}"
+                    WL_DELTA_COMMENT="Increased time spent from GH #${ISSUE_NUMBER}"
+                  else
+                    WL_COPY_COMMENT="Copied time spent from GH project item"
+                    WL_DELTA_COMMENT="Increased time spent from GH project item"
+                  fi
                   TIME_SPENT_SYNCED=false
 
-                  # Step 1: look for the managed worklog and try to update it in place
+                  # Step 1: look for the managed worklog (identified by the copy comment or the legacy
+                  # comment from earlier workflow versions) and try to update it in place.
                   WL_LIST_STATUS=$(curl -s -o /tmp/jira_wl_list.json -w "%{http_code}" \
                     -H "Authorization: Bearer ${JIRA_API_TOKEN}" \
                     "${JIRA_ISSUE_URL}/worklog")
                   echo "  → GET worklogs HTTP $WL_LIST_STATUS"
 
                   if [ "$WL_LIST_STATUS" -ge 200 ] && [ "$WL_LIST_STATUS" -lt 300 ]; then
-                    MANAGED_WL_ID=$(jq -r --arg c "$MANAGED_WL_COMMENT" \
-                      '.worklogs[] | select(.comment == $c) | .id' \
+                    MANAGED_WL_ID=$(jq -r --arg c "$WL_COPY_COMMENT" \
+                      '.worklogs[] | select(.comment == $c or .comment == "[managed by track-reporting-date workflow]") | .id' \
                       /tmp/jira_wl_list.json | head -1)
 
                     if [ -n "$MANAGED_WL_ID" ]; then
-                      WL_PAYLOAD=$(jq -n --arg ts "$JIRA_TIME_SPENT" --arg c "$MANAGED_WL_COMMENT" \
+                      WL_PAYLOAD=$(jq -n --arg ts "$JIRA_TIME_SPENT" --arg c "$WL_COPY_COMMENT" \
                         '{timeSpent: $ts, comment: $c}')
                       WL_STATUS=$(curl -s -o /tmp/jira_wl.json -w "%{http_code}" \
                         -H "Authorization: Bearer ${JIRA_API_TOKEN}" \
@@ -229,7 +238,8 @@ jobs:
                     fi
                   fi
 
-                  # Step 2 (fallback): GET issue timespent, compute delta, POST new worklog for the difference
+                  # Step 2 (fallback): GET issue timespent, compute delta, POST a new worklog for the difference.
+                  # Also used when no managed worklog exists yet (first sync → posts with copy comment).
                   if [ "$TIME_SPENT_SYNCED" = "false" ]; then
                     JIRA_GET_STATUS=$(curl -s -o /tmp/jira_issue.json -w "%{http_code}" \
                       -H "Authorization: Bearer ${JIRA_API_TOKEN}" \
@@ -252,8 +262,15 @@ jobs:
                       }')
 
                       if [ -n "$DELTA_JIRA" ]; then
-                        echo "  → Logging delta worklog: $DELTA_JIRA"
-                        WL_PAYLOAD=$(jq -n --arg ts "$DELTA_JIRA" '{timeSpent: $ts}')
+                        # First sync (no prior worklogs) → copy comment; otherwise → delta comment
+                        if [ "$JIRA_TIMESPENT_SECS" = "0" ]; then
+                          WL_COMMENT="$WL_COPY_COMMENT"
+                        else
+                          WL_COMMENT="$WL_DELTA_COMMENT"
+                        fi
+                        echo "  → Logging worklog: $DELTA_JIRA ($WL_COMMENT)"
+                        WL_PAYLOAD=$(jq -n --arg ts "$DELTA_JIRA" --arg c "$WL_COMMENT" \
+                          '{timeSpent: $ts, comment: $c}')
                         WL_STATUS=$(curl -s -o /tmp/jira_wl.json -w "%{http_code}" \
                           -H "Authorization: Bearer ${JIRA_API_TOKEN}" \
                           -X POST \
@@ -261,9 +278,9 @@ jobs:
                           -d "$WL_PAYLOAD" \
                           "${JIRA_ISSUE_URL}/worklog?adjustEstimate=leave")
                         if [ "$WL_STATUS" -ge 200 ] && [ "$WL_STATUS" -lt 300 ]; then
-                          echo "  → Delta $DELTA_JIRA logged (HTTP $WL_STATUS). JIRA total now ~${JIRA_TIME_SPENT}."
+                          echo "  → $DELTA_JIRA logged (HTTP $WL_STATUS). JIRA total now ~${JIRA_TIME_SPENT}."
                         else
-                          echo "  → Warning: Failed to log Time Spent delta (HTTP $WL_STATUS)"
+                          echo "  → Warning: Failed to log Time Spent worklog (HTTP $WL_STATUS)"
                           cat /tmp/jira_wl.json
                         fi
                       else
@@ -308,6 +325,7 @@ jobs:
                     pageInfo { hasNextPage endCursor }
                     nodes {
                       id
+                      content { ... on Issue { number } }
                       fieldValues(first: 20) {
                         nodes {
                           ... on ProjectV2ItemFieldTextValue {
@@ -377,6 +395,7 @@ jobs:
                       pageInfo { hasNextPage endCursor }
                       nodes {
                         id
+                        content { ... on Issue { number } }
                         fieldValues(first: 20) {
                           nodes {
                             ... on ProjectV2ItemFieldTextValue {
