@@ -21,9 +21,8 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GH_TOKEN }}
       JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-      JIRA_BASE_URL: https://issues.redhat.com
-      PROJECT_OWNER: dgutierr-org
-      PROJECT_NUMBER: 1
+      JIRA_BASE_URL: ${{ vars.JIRA_BASE_URL }}
+      PROJECTS: ${{ vars.PROJECTS }}
     steps:
       - name: Update 'Reporting Date' and 'Reporting Log' for changed items
         run: |
@@ -301,97 +300,42 @@ jobs:
           }
 
           # ---------------------------------------------------------------------------
-          # Fetch project metadata and first page of items (100 per page)
+          # Iterate over all configured projects
+          # PROJECTS variable format: space-separated "owner:project_number" entries
+          # e.g. "dgutierr-org:1 another-org:3"
           # ---------------------------------------------------------------------------
-          echo "Fetching project metadata and page 1..."
-          PAGE_RESPONSE=$(gh api graphql -f query='
-            query($owner: String!, $number: Int!) {
-              organization(login: $owner) {
-                projectV2(number: $number) {
-                  id
-                  fields(first: 30) {
-                    nodes {
-                      ... on ProjectV2Field {
-                        id
-                        name
-                      }
-                      ... on ProjectV2SingleSelectField {
-                        id
-                        name
-                      }
-                    }
-                  }
-                  items(first: 100) {
-                    pageInfo { hasNextPage endCursor }
-                    nodes {
-                      id
-                      content { ... on Issue { number } }
-                      fieldValues(first: 20) {
-                        nodes {
-                          ... on ProjectV2ItemFieldTextValue {
-                            text
-                            field { ... on ProjectV2Field { name } }
-                          }
-                          ... on ProjectV2ItemFieldNumberValue {
-                            number
-                            field { ... on ProjectV2Field { name } }
-                          }
-                          ... on ProjectV2ItemFieldSingleSelectValue {
-                            name
-                            field { ... on ProjectV2SingleSelectField { name } }
-                          }
-                          ... on ProjectV2ItemFieldDateValue {
-                            date
-                            field { ... on ProjectV2Field { name } }
-                          }
+          TOTAL_UPDATED=0
+          TOTAL_SKIPPED=0
+
+          for PROJECT_ENTRY in $PROJECTS; do
+            PROJECT_OWNER="${PROJECT_ENTRY%%:*}"
+            PROJECT_NUMBER="${PROJECT_ENTRY##*:}"
+
+            echo ""
+            echo "========================================"
+            echo "Project: $PROJECT_OWNER #$PROJECT_NUMBER"
+            echo "========================================"
+
+            # Fetch project metadata and first page of items (100 per page)
+            echo "Fetching project metadata and page 1..."
+            PAGE_RESPONSE=$(gh api graphql -f query='
+              query($owner: String!, $number: Int!) {
+                organization(login: $owner) {
+                  projectV2(number: $number) {
+                    id
+                    fields(first: 30) {
+                      nodes {
+                        ... on ProjectV2Field {
+                          id
+                          name
+                        }
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          name
                         }
                       }
                     }
-                  }
-                }
-              }
-            }
-          ' -f owner="$PROJECT_OWNER" -F number=$PROJECT_NUMBER)
-
-          PROJECT_ID=$(echo "$PAGE_RESPONSE" | jq -r '.data.organization.projectV2.id')
-          REPORTING_DATE_FIELD_ID=$(echo "$PAGE_RESPONSE" | jq -r '.data.organization.projectV2.fields.nodes[] | select(.name == "Reporting Date") | .id')
-          REPORTING_LOG_FIELD_ID=$(echo "$PAGE_RESPONSE"  | jq -r '.data.organization.projectV2.fields.nodes[] | select(.name == "Reporting Log")  | .id')
-
-          if [ -z "$REPORTING_DATE_FIELD_ID" ]; then
-            echo "Error: 'Reporting Date' field not found in project."
-            exit 1
-          fi
-          if [ -z "$REPORTING_LOG_FIELD_ID" ]; then
-            echo "Error: 'Reporting Log' field not found in project."
-            exit 1
-          fi
-
-          echo "Project ID             : $PROJECT_ID"
-          echo "Reporting Date field ID: $REPORTING_DATE_FIELD_ID"
-          echo "Reporting Log field ID : $REPORTING_LOG_FIELD_ID"
-
-          UPDATED_COUNT=0
-          SKIPPED_COUNT=0
-          PAGE=1
-
-          process_items "$PAGE_RESPONSE"
-
-          # ---------------------------------------------------------------------------
-          # Paginate through any remaining pages
-          # ---------------------------------------------------------------------------
-          HAS_NEXT=$(echo "$PAGE_RESPONSE" | jq -r '.data.organization.projectV2.items.pageInfo.hasNextPage')
-          CURSOR=$(echo "$PAGE_RESPONSE"   | jq -r '.data.organization.projectV2.items.pageInfo.endCursor')
-
-          while [ "$HAS_NEXT" = "true" ]; do
-            PAGE=$((PAGE + 1))
-            echo ""
-            echo "Fetching page $PAGE (cursor: $CURSOR)..."
-
-            PAGE_RESPONSE=$(gh api graphql -f query='
-              query($owner: String!, $number: Int!, $cursor: String!) {
-                organization(login: $owner) {
-                  projectV2(number: $number) {
-                    items(first: 100, after: $cursor) {
+                    items(first: 100) {
                       pageInfo { hasNextPage endCursor }
                       nodes {
                         id
@@ -421,13 +365,89 @@ jobs:
                   }
                 }
               }
-            ' -f owner="$PROJECT_OWNER" -F number=$PROJECT_NUMBER -f cursor="$CURSOR")
+            ' -f owner="$PROJECT_OWNER" -F number=$PROJECT_NUMBER)
+
+            PROJECT_ID=$(echo "$PAGE_RESPONSE" | jq -r '.data.organization.projectV2.id')
+            REPORTING_DATE_FIELD_ID=$(echo "$PAGE_RESPONSE" | jq -r '.data.organization.projectV2.fields.nodes[] | select(.name == "Reporting Date") | .id')
+            REPORTING_LOG_FIELD_ID=$(echo "$PAGE_RESPONSE"  | jq -r '.data.organization.projectV2.fields.nodes[] | select(.name == "Reporting Log")  | .id')
+
+            if [ -z "$REPORTING_DATE_FIELD_ID" ]; then
+              echo "Error: 'Reporting Date' field not found in project $PROJECT_OWNER #$PROJECT_NUMBER. Skipping."
+              continue
+            fi
+            if [ -z "$REPORTING_LOG_FIELD_ID" ]; then
+              echo "Error: 'Reporting Log' field not found in project $PROJECT_OWNER #$PROJECT_NUMBER. Skipping."
+              continue
+            fi
+
+            echo "Project ID             : $PROJECT_ID"
+            echo "Reporting Date field ID: $REPORTING_DATE_FIELD_ID"
+            echo "Reporting Log field ID : $REPORTING_LOG_FIELD_ID"
+
+            UPDATED_COUNT=0
+            SKIPPED_COUNT=0
+            PAGE=1
 
             process_items "$PAGE_RESPONSE"
 
+            # Paginate through any remaining pages
             HAS_NEXT=$(echo "$PAGE_RESPONSE" | jq -r '.data.organization.projectV2.items.pageInfo.hasNextPage')
             CURSOR=$(echo "$PAGE_RESPONSE"   | jq -r '.data.organization.projectV2.items.pageInfo.endCursor')
+
+            while [ "$HAS_NEXT" = "true" ]; do
+              PAGE=$((PAGE + 1))
+              echo ""
+              echo "Fetching page $PAGE (cursor: $CURSOR)..."
+
+              PAGE_RESPONSE=$(gh api graphql -f query='
+                query($owner: String!, $number: Int!, $cursor: String!) {
+                  organization(login: $owner) {
+                    projectV2(number: $number) {
+                      items(first: 100, after: $cursor) {
+                        pageInfo { hasNextPage endCursor }
+                        nodes {
+                          id
+                          content { ... on Issue { number } }
+                          fieldValues(first: 20) {
+                            nodes {
+                              ... on ProjectV2ItemFieldTextValue {
+                                text
+                                field { ... on ProjectV2Field { name } }
+                              }
+                              ... on ProjectV2ItemFieldNumberValue {
+                                number
+                                field { ... on ProjectV2Field { name } }
+                              }
+                              ... on ProjectV2ItemFieldSingleSelectValue {
+                                name
+                                field { ... on ProjectV2SingleSelectField { name } }
+                              }
+                              ... on ProjectV2ItemFieldDateValue {
+                                date
+                                field { ... on ProjectV2Field { name } }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ' -f owner="$PROJECT_OWNER" -F number=$PROJECT_NUMBER -f cursor="$CURSOR")
+
+              process_items "$PAGE_RESPONSE"
+
+              HAS_NEXT=$(echo "$PAGE_RESPONSE" | jq -r '.data.organization.projectV2.items.pageInfo.hasNextPage')
+              CURSOR=$(echo "$PAGE_RESPONSE"   | jq -r '.data.organization.projectV2.items.pageInfo.endCursor')
+            done
+
+            echo ""
+            echo "Project summary: $UPDATED_COUNT item(s) updated, $SKIPPED_COUNT item(s) skipped (across $PAGE page(s))."
+            TOTAL_UPDATED=$((TOTAL_UPDATED + UPDATED_COUNT))
+            TOTAL_SKIPPED=$((TOTAL_SKIPPED + SKIPPED_COUNT))
           done
 
           echo ""
-          echo "Summary: $UPDATED_COUNT item(s) updated, $SKIPPED_COUNT item(s) skipped (across $PAGE page(s))."
+          echo "========================================"
+          echo "Total: $TOTAL_UPDATED item(s) updated, $TOTAL_SKIPPED item(s) skipped across all projects."
+          echo "========================================"
