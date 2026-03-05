@@ -1,8 +1,14 @@
 # GitHub Project Setup Guide
 
-## Project
+## Projects
 
-**URL:** `https://github.com/orgs/dgutierr-org/projects/1`
+The workflow processes all projects listed in the `PROJECTS` repository variable. Each entry is an `owner:project_number` pair, e.g.:
+
+```
+dgutierr-org:1 another-org:3
+```
+
+Repeat the steps below for **every project** you add to the list.
 
 ---
 
@@ -14,14 +20,14 @@ The workflow reads and writes specific fields on each project item. All field na
 
 Changes to any of these fields trigger an update to `Reporting Date` and a new entry in `Reporting Log`.
 
-| Field name         | Type          | Notes                                                                                     |
-|--------------------|---------------|-------------------------------------------------------------------------------------------|
-| `Status`           | Single select | e.g. Backlog, In Progress, Done                                                           |
-| `Priority`         | Single select | e.g. Low, Medium, High                                                                    |
-| `Estimate`         | Number        | Estimated effort or story points                                                          |
-| `Remaining Work`   | Number        | Remaining effort                                                                          |
-| `Time Spent`       | Number        | Time already spent                                                                        |
-| `External Reference` | Text        | Optional JIRA ticket ID (e.g. `SRVLOGIC-774`). When set, changes are synced to JIRA at `https://issues.redhat.com/browse/{ID}` |
+| Field name           | Type          | Notes                                                                                     |
+|----------------------|---------------|-------------------------------------------------------------------------------------------|
+| `Status`             | Single select | e.g. Backlog, In Progress, Done                                                           |
+| `Priority`           | Single select | e.g. Low, Medium, High                                                                    |
+| `Estimate`           | Number        | Estimated effort in weeks (e.g. `2` = 2 weeks, `0.4` = 2 days, `0.1` = 4 hours)         |
+| `Remaining Work`     | Number        | Remaining effort in weeks                                                                 |
+| `Time Spent`         | Number        | Time already spent in weeks                                                               |
+| `External Reference` | Text          | Optional: ticket ID in the configured JIRA instance (e.g. `SRVLOGIC-774`). When set, changes are synced to JIRA at `<JIRA_BASE_URL>/browse/<ID>` |
 
 ### Workflow-managed fields (written by the workflow)
 
@@ -49,12 +55,13 @@ The oldest entry is automatically discarded when the log exceeds 5 entries.
 
 ---
 
-## How to add a field to the project
+## How to add a field to a project
 
-1. Go to **`https://github.com/orgs/dgutierr-org/projects/1`**
+1. Go to **`https://github.com/orgs/<org>/projects/<number>`**
 2. Click **"+"** at the right end of the column headers → **"New field"**
-3. Enter the field name and select the correct type
-4. Click **"Save"**
+3. Enter the field name exactly as shown in the table above (case-sensitive)
+4. Select the correct type
+5. Click **"Save"**
 
 ---
 

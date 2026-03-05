@@ -2,7 +2,7 @@
 
 ## What it does
 
-Runs **daily at 05:00 UTC** and checks **all** project items. For each item it compares the current values of the five tracked fields (**Status**, **Priority**, **Estimate**, **Remaining Work**, **Time Spent**) against the last entry in the item's **`Reporting Log`** field. If a change is detected (or the log is empty), the workflow:
+Runs **daily at 05:00 UTC** and checks **all items across all configured projects**. For each item it compares the current values of the five tracked fields (**Status**, **Priority**, **Estimate**, **Remaining Work**, **Time Spent**) against the last entry in the item's **`Reporting Log`** field. If a change is detected (or the log is empty), the workflow:
 
 1. Sets **`Reporting Date`** to today
 2. Prepends a new entry to **`Reporting Log`** in the format:
@@ -16,14 +16,16 @@ No action is taken when non-tracked fields change (e.g. title, assignee).
 
 ## Setup
 
-### 1. Add the required fields to the project
+### 1. Add the required fields to each project
 
-In **`https://github.com/orgs/dgutierr-org/projects/1`**, make sure the following fields exist:
+In every GitHub Project you want to track, make sure the following fields exist:
 
 | Field name       | Type   | Purpose                                                        |
 |------------------|--------|----------------------------------------------------------------|
 | `Reporting Date` | Date   | Set to today when a tracked field changes                      |
 | `Reporting Log`  | Text   | Log of tracked field values, newest entry first, max 5 entries |
+
+See the [GitHub Project Setup Guide](track-reporting-date-project-setup.md) for detailed instructions.
 
 ### 2. Create a Personal Access Token (PAT)
 
@@ -37,7 +39,9 @@ In **`https://github.com/orgs/dgutierr-org/projects/1`**, make sure the followin
 
 > Why not use the default `GITHUB_TOKEN`? That token is automatically created per workflow run and is scoped to the repository only. It cannot read or write fields on organization-level GitHub Projects v2.
 
-### 3. Store the token as a repository secret
+The same PAT can access projects in multiple organizations as long as the token owner is a member of each org. For organizations with **SAML SSO**, the PAT must also be authorized for each org via **GitHub → Settings → Personal access tokens → Configure SSO → Authorize**.
+
+### 3. Store the PAT as a repository secret
 
 1. Go to your repository: **`secret-santa-application` → Settings → Secrets and variables → Actions**
 2. Click **"New repository secret"**
@@ -46,11 +50,32 @@ In **`https://github.com/orgs/dgutierr-org/projects/1`**, make sure the followin
    - **Secret**: paste the token you copied above
 4. Click **"Add secret"**
 
+### 4. Configure repository variables
+
+The workflow reads its project list and JIRA host from **GitHub Actions Variables** (plaintext config, not secrets).
+
+1. Go to **`secret-santa-application` → Settings → Secrets and variables → Actions → Variables tab**
+2. Click **"New repository variable"** and add the following:
+
+| Variable name  | Type     | Example value                          | Description |
+|----------------|----------|----------------------------------------|-------------|
+| `PROJECTS`     | Variable | `dgutierr-org:1 another-org:3`         | Space-separated list of `owner:project_number` pairs to process |
+| `JIRA_BASE_URL`| Variable | `https://issues.redhat.com`            | Base URL of the JIRA instance (no trailing slash) |
+
+**`PROJECTS` format:** each entry is `<org-login>:<project-number>`, separated by spaces. The project number is the integer shown in the project URL: `https://github.com/orgs/<org>/projects/<number>`.
+
+Example with three projects across two organizations:
+```
+dgutierr-org:1 dgutierr-org:2 another-org:5
+```
+
+> **Tip:** Variables can also be defined at the **organization level** (org Settings → Secrets and variables → Actions → Variables) and shared across multiple repositories, which is useful if several repos run this same workflow against the same set of projects.
+
 ---
 
-### 4. (Optional) Configure JIRA sync
+### 5. (Optional) Configure JIRA sync
 
-If you want changes to be synced to JIRA tickets, add the `External Reference` field to the project (see the [GitHub Project Setup Guide](track-reporting-date-project-setup.md)) and store two additional secrets:
+If you want changes to be synced to JIRA tickets, add the `External Reference` field to each project (see the [GitHub Project Setup Guide](track-reporting-date-project-setup.md)) and store one additional secret:
 
 | Secret name      | Value                                                                 |
 |------------------|-----------------------------------------------------------------------|
@@ -58,19 +83,19 @@ If you want changes to be synced to JIRA tickets, add the `External Reference` f
 
 To add the secret: **`secret-santa-application` → Settings → Secrets and variables → Actions → New repository secret**.
 
-> **Note:** `issues.redhat.com` runs JIRA Data Center, which uses PAT-based Bearer token authentication. Basic auth (username + password/API key) is not supported.
+> **Note:** JIRA Data Center (e.g. `issues.redhat.com`) uses PAT-based Bearer token authentication. Basic auth (username + password/API key) is not supported.
 
 When `External Reference` is set on a project item (e.g. `SRVLOGIC-774`), the workflow will:
-- Update **Priority** and **time tracking** (Estimate → original estimate, Remaining Work → remaining estimate) on the JIRA ticket at `https://issues.redhat.com/browse/SRVLOGIC-774`
-- Log **Time Spent** as a new worklog entry on the JIRA ticket
+- Update **Priority** and **time tracking** (Estimate → original estimate, Remaining Work → remaining estimate) on the JIRA ticket
+- Keep **Time Spent** in sync by logging a worklog entry whose comment identifies it as workflow-managed (e.g. `Copied time spent from GH #42` or `Increased time spent from GH #42`)
 
-> **Note:** Time Spent is added as a worklog on every detected change, not as an absolute value. JIRA calculates total time spent from the sum of all worklog entries.
+The JIRA ticket URL is constructed as `<JIRA_BASE_URL>/browse/<External Reference>`.
 
 If `JIRA_API_TOKEN` is not set, the JIRA sync step is skipped silently.
 
 ---
 
-Once all steps are done, the workflow will run automatically every day at 05:00 UTC and update `Reporting Date` and `Reporting Log` whenever a tracked field has changed since the last run.
+Once all steps are done, the workflow will run automatically every day at 05:00 UTC and update `Reporting Date` and `Reporting Log` whenever a tracked field has changed since the last run, across all projects listed in `PROJECTS`.
 
 ---
 
