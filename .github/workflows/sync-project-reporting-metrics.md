@@ -1,4 +1,4 @@
-# Sync Project(s) Reporting Metrics
+# Sync Project Reporting Metrics
 
 ## What it does
 
@@ -129,7 +129,7 @@ For JIRA sync testing also:
 
 ### Manual trigger (skip the scheduled wait)
 
-1. Go to **Actions → Sync Project(s) Reporting Metrics → Run workflow**
+1. Go to **Actions → Sync Project Reporting Metrics → Run workflow**
 2. Click **"Run workflow"**
 3. The workflow runs immediately against all projects in `PROJECTS`
 
@@ -138,7 +138,7 @@ For JIRA sync testing also:
 1. **Go to a project** listed in your `PROJECTS` variable and pick any issue/item
 2. **Change one of the tracked fields**: Status, Priority, Estimate, Remaining Work, or Time Spent
 3. **Trigger the workflow** manually (see above) or wait for 05:00 UTC
-4. **Check the Actions log** → open the latest run of `Sync Project(s) Reporting Metrics`. You should see:
+4. **Check the Actions log** → open the latest run of `Sync Project Reporting Metrics`. You should see:
    - A `========` header per project with the org and project number
    - The item listed with a change detected and an update confirmation
    - A per-project summary and a grand total at the end
