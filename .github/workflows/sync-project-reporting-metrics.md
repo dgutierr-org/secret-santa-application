@@ -1,8 +1,8 @@
-# track-reporting-date workflow
+# Sync Project Reporting Metrics
 
 ## What it does
 
-Runs **twice daily at 00:00 and 12:00 UTC** and checks **all items across all configured projects**. For each item it compares the current values of the five tracked fields (**Status**, **Priority**, **Estimate**, **Remaining Work**, **Time Spent**) against the last entry in the item's **`Reporting Log`** field. If a change is detected (or the log is empty), the workflow:
+This is an **automation workflow** designed to facilitate **progress reporting and sync across multiple GitHub Projects**. It runs **twice daily at 00:00 and 12:00 UTC** and checks **all items across all configured projects**. For each item it compares the current values of the five tracked fields (**Status**, **Priority**, **Estimate**, **Remaining Work**, **Time Spent**) against the last entry in the item's **`Reporting Log`** field. If a change is detected (or the log is empty), the workflow:
 
 1. Sets **`Reporting Date`** to today
 2. Prepends a new entry to **`Reporting Log`** in the format:
@@ -129,7 +129,7 @@ For JIRA sync testing also:
 
 ### Manual trigger (skip the scheduled wait)
 
-1. Go to **Actions → Track Reporting Date on Field Changes → Run workflow**
+1. Go to **Actions → Sync Project Reporting Metrics → Run workflow**
 2. Click **"Run workflow"**
 3. The workflow runs immediately against all projects in `PROJECTS`
 
@@ -138,7 +138,7 @@ For JIRA sync testing also:
 1. **Go to a project** listed in your `PROJECTS` variable and pick any issue/item
 2. **Change one of the tracked fields**: Status, Priority, Estimate, Remaining Work, or Time Spent
 3. **Trigger the workflow** manually (see above) or wait for 05:00 UTC
-4. **Check the Actions log** → open the latest run of `Track Reporting Date on Field Changes`. You should see:
+4. **Check the Actions log** → open the latest run of `Sync Project Reporting Metrics`. You should see:
    - A `========` header per project with the org and project number
    - The item listed with a change detected and an update confirmation
    - A per-project summary and a grand total at the end
