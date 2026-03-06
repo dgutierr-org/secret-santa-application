@@ -1,4 +1,4 @@
-name: Track Reporting Date on Field Changes
+name: Sync Project(s) Reporting Metrics
 
 # ---------------------------------------------------------------------------
 # Schedule configuration
@@ -16,7 +16,7 @@ on:
 
 jobs:
   track-reporting-date:
-    name: Check and update 'Reporting Date'
+    name: Sync project(s) reporting metrics
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -24,7 +24,7 @@ jobs:
       JIRA_BASE_URL: ${{ vars.JIRA_BASE_URL }}
       PROJECTS: ${{ vars.PROJECTS }}
     steps:
-      - name: Update 'Reporting Date' and 'Reporting Log' for changed items
+      - name: Sync project(s) reporting metrics across all configured projects
         run: |
           set -e
 
