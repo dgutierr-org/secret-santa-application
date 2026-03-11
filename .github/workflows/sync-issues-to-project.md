@@ -44,11 +44,11 @@ Go to **Repo → Settings → Secrets and variables → Actions → Secrets**:
 
 Go to **Repo → Settings → Secrets and variables → Actions → Variables**:
 
-| Name | Required | Default | Description |
+| Name | Required | Default | Example |
 |---|---|---|---|
-| `GH_TARGET_PROJECT` | yes | — | Target project in `org:project_number` format |
-| `GH_ISSUE_INITIAL_VALUES` | no | — | Comma-separated `field=value` pairs applied when an issue is opened; step is skipped if not set |
-| `GH_ISSUE_CLOSE_STATUS` | no | `Done` | Status option name applied when an issue is closed |
+| `GH_TARGET_PROJECT` | yes | — | `kubesmarts:1` |
+| `GH_ISSUE_INITIAL_VALUES` | no | — | `Status=Backlog, Area=Tooling, Assignees=lornakelly` |
+| `GH_ISSUE_CLOSE_STATUS` | no | `Done` | `Done` |
 
 The project number is visible in the project URL:
 `https://github.com/orgs/<org>/projects/<number>`
