@@ -52,9 +52,16 @@ The project number is visible in the project URL:
 
 ### 4. Ensure the target project has a Status field
 
-The workflow looks for a **single-select field named exactly `Status`** with an
-option named exactly `Done`. If either is missing or named differently, the
-`closed` sync will fail silently (empty `done_option_id`).
+The workflow looks for a **single-select field named exactly `Status`** with the
+following options (names are case-sensitive):
+
+| Option | Used when |
+|---|---|
+| `Backlog` | Issue is opened |
+| `Done` | Issue is closed |
+
+If either option is missing or named differently, the corresponding sync step
+will fail silently (empty option ID).
 
 ---
 
@@ -65,8 +72,8 @@ option named exactly `Done`. If either is missing or named differently, the
 - **100 item cap** — the `find_item` step fetches up to 100 project items when
   searching for a closed issue. Projects with more than 100 items may miss the
   match. Pagination support would be needed for large projects.
-- **Status field name is hardcoded** — the field must be named `Status` and the
-  closed option must be named `Done`.
+- **Status field name is hardcoded** — the field must be named `Status` with
+  options named `Backlog` (on open) and `Done` (on close).
 
 ---
 

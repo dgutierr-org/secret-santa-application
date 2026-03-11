@@ -51,6 +51,54 @@ jobs:
             --jq '.data.addProjectV2ItemById.item.id')
           echo "item_id=$ITEM_ID" >> $GITHUB_OUTPUT
 
+      - name: Set item Status to Backlog
+        if: github.event.action == 'opened'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT_TOKEN }}
+        run: |
+          RESULT=$(gh api graphql -f query='
+            query($projectId: ID!) {
+              node(id: $projectId) {
+                ... on ProjectV2 {
+                  fields(first: 20) {
+                    nodes {
+                      ... on ProjectV2SingleSelectField {
+                        id
+                        name
+                        options {
+                          id
+                          name
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }' \
+            -f projectId="${{ steps.project.outputs.id }}")
+
+          FIELD_ID=$(echo "$RESULT" | jq -r \
+            '.data.node.fields.nodes[] | select(.name == "Status") | .id')
+
+          BACKLOG_OPTION_ID=$(echo "$RESULT" | jq -r \
+            '.data.node.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "Backlog") | .id')
+
+          gh api graphql -f query='
+            mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+              updateProjectV2ItemFieldValue(input: {
+                projectId: $projectId
+                itemId: $itemId
+                fieldId: $fieldId
+                value: { singleSelectOptionId: $optionId }
+              }) {
+                projectV2Item { id }
+              }
+            }' \
+            -f projectId="${{ steps.project.outputs.id }}" \
+            -f itemId="${{ steps.add_item.outputs.item_id }}" \
+            -f fieldId="$FIELD_ID" \
+            -f optionId="$BACKLOG_OPTION_ID"
+
       - name: Get item ID and Done option ID
         id: find_item
         if: github.event.action == 'closed'
