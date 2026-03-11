@@ -1,0 +1,124 @@
+name: Sync Issues to Target GitHub Project
+
+on:
+  issues:
+    types: [opened, closed]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Parse target project
+        id: parse
+        run: |
+          ORG=$(echo "${{ vars.GH_TARGET_PROJECT }}" | cut -d: -f1)
+          NUMBER=$(echo "${{ vars.GH_TARGET_PROJECT }}" | cut -d: -f2)
+          echo "org=$ORG" >> $GITHUB_OUTPUT
+          echo "number=$NUMBER" >> $GITHUB_OUTPUT
+
+      - name: Get project ID
+        id: project
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT_TOKEN }}
+        run: |
+          PROJECT_ID=$(gh api graphql -f query='
+            query($org: String!, $number: Int!) {
+              organization(login: $org) {
+                projectV2(number: $number) {
+                  id
+                }
+              }
+            }' \
+            -f org="${{ steps.parse.outputs.org }}" \
+            -F number=${{ steps.parse.outputs.number }} \
+            --jq '.data.organization.projectV2.id')
+          echo "id=$PROJECT_ID" >> $GITHUB_OUTPUT
+
+      - name: Add issue to project
+        id: add_item
+        if: github.event.action == 'opened'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT_TOKEN }}
+        run: |
+          ITEM_ID=$(gh api graphql -f query='
+            mutation($projectId: ID!, $contentId: ID!) {
+              addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
+                item { id }
+              }
+            }' \
+            -f projectId="${{ steps.project.outputs.id }}" \
+            -f contentId="${{ github.event.issue.node_id }}" \
+            --jq '.data.addProjectV2ItemById.item.id')
+          echo "item_id=$ITEM_ID" >> $GITHUB_OUTPUT
+
+      - name: Get item ID and Done option ID
+        id: find_item
+        if: github.event.action == 'closed'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT_TOKEN }}
+        run: |
+          RESULT=$(gh api graphql -f query='
+            query($projectId: ID!) {
+              node(id: $projectId) {
+                ... on ProjectV2(id: $projectId) {
+                  items(first: 100) {
+                    nodes {
+                      id
+                      content {
+                        ... on Issue {
+                          id
+                        }
+                      }
+                    }
+                  }
+                  fields(first: 20) {
+                    nodes {
+                      ... on ProjectV2SingleSelectField {
+                        id
+                        name
+                        options {
+                          id
+                          name
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }' \
+            -f projectId="${{ steps.project.outputs.id }}")
+
+          ITEM_ID=$(echo "$RESULT" | jq -r \
+            --arg issueId "${{ github.event.issue.node_id }}" \
+            '.data.node.items.nodes[] | select(.content.id == $issueId) | .id')
+
+          FIELD_ID=$(echo "$RESULT" | jq -r \
+            '.data.node.fields.nodes[] | select(.name == "Status") | .id')
+
+          DONE_OPTION_ID=$(echo "$RESULT" | jq -r \
+            '.data.node.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "Done") | .id')
+
+          echo "item_id=$ITEM_ID" >> $GITHUB_OUTPUT
+          echo "field_id=$FIELD_ID" >> $GITHUB_OUTPUT
+          echo "done_option_id=$DONE_OPTION_ID" >> $GITHUB_OUTPUT
+
+      - name: Set item Status to Done
+        if: github.event.action == 'closed'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT_TOKEN }}
+        run: |
+          gh api graphql -f query='
+            mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+              updateProjectV2ItemFieldValue(input: {
+                projectId: $projectId
+                itemId: $itemId
+                fieldId: $fieldId
+                value: { singleSelectOptionId: $optionId }
+              }) {
+                projectV2Item { id }
+              }
+            }' \
+            -f projectId="${{ steps.project.outputs.id }}" \
+            -f itemId="${{ steps.find_item.outputs.item_id }}" \
+            -f fieldId="${{ steps.find_item.outputs.field_id }}" \
+            -f optionId="${{ steps.find_item.outputs.done_option_id }}"
