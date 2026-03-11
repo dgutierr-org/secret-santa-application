@@ -47,7 +47,7 @@ Go to **Repo → Settings → Secrets and variables → Actions → Variables**:
 | Name | Required | Default | Description |
 |---|---|---|---|
 | `GH_TARGET_PROJECT` | yes | — | Target project in `org:project_number` format |
-| `GH_ISSUE_INITIAL_VALUES` | no | `Status=Backlog` | Comma-separated `field=value` pairs applied when an issue is opened |
+| `GH_ISSUE_INITIAL_VALUES` | no | — | Comma-separated `field=value` pairs applied when an issue is opened; step is skipped if not set |
 | `GH_ISSUE_CLOSE_STATUS` | no | `Done` | Status option name applied when an issue is closed |
 
 The project number is visible in the project URL:
@@ -82,7 +82,6 @@ Default options required unless overridden:
 
 | Option | Used when |
 |---|---|
-| `Backlog` | Issue opened (default initial Status) |
 | `Done` | Issue closed (default close Status) |
 
 ---

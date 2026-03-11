@@ -57,7 +57,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_PAT_TOKEN }}
         run: |
           INITIAL_VALUES="${{ vars.GH_ISSUE_INITIAL_VALUES }}"
-          INITIAL_VALUES="${INITIAL_VALUES:-Status=Backlog}"
+          [ -z "$INITIAL_VALUES" ] && exit 0
 
           # Fetch all project fields (single-select and text)
           FIELDS_RESULT=$(gh api graphql -f query='
