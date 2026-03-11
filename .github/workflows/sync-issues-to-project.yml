@@ -51,12 +51,16 @@ jobs:
             --jq '.data.addProjectV2ItemById.item.id')
           echo "item_id=$ITEM_ID" >> $GITHUB_OUTPUT
 
-      - name: Set item Status to Backlog
+      - name: Set initial field values
         if: github.event.action == 'opened'
         env:
           GH_TOKEN: ${{ secrets.GH_PAT_TOKEN }}
         run: |
-          RESULT=$(gh api graphql -f query='
+          INITIAL_VALUES="${{ vars.GH_ISSUE_INITIAL_VALUES }}"
+          INITIAL_VALUES="${INITIAL_VALUES:-Status=Backlog}"
+
+          # Fetch all project fields (single-select and text)
+          FIELDS_RESULT=$(gh api graphql -f query='
             query($projectId: ID!) {
               node(id: $projectId) {
                 ... on ProjectV2 {
@@ -65,10 +69,12 @@ jobs:
                       ... on ProjectV2SingleSelectField {
                         id
                         name
-                        options {
-                          id
-                          name
-                        }
+                        options { id name }
+                      }
+                      ... on ProjectV2Field {
+                        id
+                        name
+                        dataType
                       }
                     }
                   }
@@ -77,34 +83,75 @@ jobs:
             }' \
             -f projectId="${{ steps.project.outputs.id }}")
 
-          FIELD_ID=$(echo "$RESULT" | jq -r \
-            '.data.node.fields.nodes[] | select(.name == "Status") | .id')
+          # Apply each key=value pair
+          while IFS= read -r PAIR; do
+            PAIR=$(echo "$PAIR" | xargs)
+            [ -z "$PAIR" ] && continue
 
-          BACKLOG_OPTION_ID=$(echo "$RESULT" | jq -r \
-            '.data.node.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "Backlog") | .id')
+            KEY=$(echo "$PAIR" | cut -d= -f1 | xargs)
+            VALUE=$(echo "$PAIR" | cut -d= -f2- | xargs)
 
-          gh api graphql -f query='
-            mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
-              updateProjectV2ItemFieldValue(input: {
-                projectId: $projectId
-                itemId: $itemId
-                fieldId: $fieldId
-                value: { singleSelectOptionId: $optionId }
-              }) {
-                projectV2Item { id }
-              }
-            }' \
-            -f projectId="${{ steps.project.outputs.id }}" \
-            -f itemId="${{ steps.add_item.outputs.item_id }}" \
-            -f fieldId="$FIELD_ID" \
-            -f optionId="$BACKLOG_OPTION_ID"
+            if [ "$KEY" = "Assignees" ]; then
+              # Add assignees to the source issue (space-separated usernames supported)
+              echo "$VALUE" | tr ' ' '\n' | jq -R . | jq -s '{assignees: .}' | \
+                gh api "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/assignees" \
+                --method POST --input -
+            else
+              FIELD_ID=$(echo "$FIELDS_RESULT" | jq -r \
+                --arg name "$KEY" \
+                '.data.node.fields.nodes[] | select(.name == $name) | .id // empty' | head -1)
 
-      - name: Get item ID and Done option ID
+              [ -z "$FIELD_ID" ] && echo "Warning: field '$KEY' not found, skipping." && continue
+
+              OPTION_ID=$(echo "$FIELDS_RESULT" | jq -r \
+                --arg name "$KEY" --arg val "$VALUE" \
+                '.data.node.fields.nodes[] | select(.name == $name) | .options[]? | select(.name == $val) | .id // empty')
+
+              if [ -n "$OPTION_ID" ]; then
+                gh api graphql -f query='
+                  mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                    updateProjectV2ItemFieldValue(input: {
+                      projectId: $projectId
+                      itemId: $itemId
+                      fieldId: $fieldId
+                      value: { singleSelectOptionId: $optionId }
+                    }) {
+                      projectV2Item { id }
+                    }
+                  }' \
+                  -f projectId="${{ steps.project.outputs.id }}" \
+                  -f itemId="${{ steps.add_item.outputs.item_id }}" \
+                  -f fieldId="$FIELD_ID" \
+                  -f optionId="$OPTION_ID"
+              else
+                gh api graphql -f query='
+                  mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $text: String!) {
+                    updateProjectV2ItemFieldValue(input: {
+                      projectId: $projectId
+                      itemId: $itemId
+                      fieldId: $fieldId
+                      value: { text: $text }
+                    }) {
+                      projectV2Item { id }
+                    }
+                  }' \
+                  -f projectId="${{ steps.project.outputs.id }}" \
+                  -f itemId="${{ steps.add_item.outputs.item_id }}" \
+                  -f fieldId="$FIELD_ID" \
+                  -f text="$VALUE"
+              fi
+            fi
+          done < <(echo "$INITIAL_VALUES" | tr ',' '\n')
+
+      - name: Get item ID and close Status option ID
         id: find_item
         if: github.event.action == 'closed'
         env:
           GH_TOKEN: ${{ secrets.GH_PAT_TOKEN }}
         run: |
+          CLOSE_STATUS="${{ vars.GH_ISSUE_CLOSE_STATUS }}"
+          CLOSE_STATUS="${CLOSE_STATUS:-Done}"
+
           # Fetch Status field info once
           FIELDS_RESULT=$(gh api graphql -f query='
             query($projectId: ID!) {
@@ -127,8 +174,9 @@ jobs:
           FIELD_ID=$(echo "$FIELDS_RESULT" | jq -r \
             '.data.node.fields.nodes[] | select(.name == "Status") | .id')
 
-          DONE_OPTION_ID=$(echo "$FIELDS_RESULT" | jq -r \
-            '.data.node.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "Done") | .id')
+          CLOSE_OPTION_ID=$(echo "$FIELDS_RESULT" | jq -r \
+            --arg status "$CLOSE_STATUS" \
+            '.data.node.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == $status) | .id')
 
           # Paginate items until the matching issue is found
           ITEM_ID=""
@@ -183,9 +231,9 @@ jobs:
 
           echo "item_id=$ITEM_ID" >> $GITHUB_OUTPUT
           echo "field_id=$FIELD_ID" >> $GITHUB_OUTPUT
-          echo "done_option_id=$DONE_OPTION_ID" >> $GITHUB_OUTPUT
+          echo "close_option_id=$CLOSE_OPTION_ID" >> $GITHUB_OUTPUT
 
-      - name: Set item Status to Done
+      - name: Set item close Status
         if: github.event.action == 'closed'
         env:
           GH_TOKEN: ${{ secrets.GH_PAT_TOKEN }}
@@ -204,4 +252,4 @@ jobs:
             -f projectId="${{ steps.project.outputs.id }}" \
             -f itemId="${{ steps.find_item.outputs.item_id }}" \
             -f fieldId="${{ steps.find_item.outputs.field_id }}" \
-            -f optionId="${{ steps.find_item.outputs.done_option_id }}"
+            -f optionId="${{ steps.find_item.outputs.close_option_id }}"

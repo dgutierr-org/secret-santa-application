@@ -3,7 +3,8 @@
 Workflow file: `sync-issues-to-project.yml`
 
 Automatically adds issues to a GitHub Project in another organization when they
-are opened, and sets their Status to `Done` when they are closed.
+are opened, sets configurable initial field values, and updates the Status when
+they are closed.
 
 ---
 
@@ -11,8 +12,8 @@ are opened, and sets their Status to `Done` when they are closed.
 
 | Event | Action |
 |---|---|
-| Issue opened | Issue is added to the target project via `addProjectV2ItemById` |
-| Issue closed | Project item Status field is updated to `Done` |
+| Issue opened | Issue is added to the target project; initial field values are applied |
+| Issue closed | Project item Status is updated to the configured close status |
 
 The project item is natively linked to the source issue — no custom fields are
 needed. Clicking the item in the project board opens the original issue.
@@ -39,29 +40,50 @@ Go to **Repo → Settings → Secrets and variables → Actions → Secrets**:
 |---|---|
 | `GH_PAT_TOKEN` | The PAT created above |
 
-### 3. Add the variable
+### 3. Add the variables
 
 Go to **Repo → Settings → Secrets and variables → Actions → Variables**:
 
-| Name | Value | Example |
-|---|---|---|
-| `GH_TARGET_PROJECT` | `org:project_number` | `kubesmarts:1` |
+| Name | Required | Default | Description |
+|---|---|---|---|
+| `GH_TARGET_PROJECT` | yes | — | Target project in `org:project_number` format |
+| `GH_ISSUE_INITIAL_VALUES` | no | `Status=Backlog` | Comma-separated `field=value` pairs applied when an issue is opened |
+| `GH_ISSUE_CLOSE_STATUS` | no | `Done` | Status option name applied when an issue is closed |
 
 The project number is visible in the project URL:
 `https://github.com/orgs/<org>/projects/<number>`
 
+#### `GH_ISSUE_INITIAL_VALUES` format
+
+Comma-separated `field=value` pairs. Field names must match the project field
+names exactly (case-sensitive). Example:
+
+```
+Status=Backlog, Area=Tooling, Assignees=lornakelly
+```
+
+Supported field types:
+
+| Field type | Behaviour |
+|---|---|
+| Single-select | Matches by option name |
+| Text | Sets the text value directly |
+| `Assignees` | Adds assignees to the source issue via the REST API; space-separate multiple users: `Assignees=user1 user2` |
+
+> Number and date fields are not currently supported.
+
 ### 4. Ensure the target project has a Status field
 
-The workflow looks for a **single-select field named exactly `Status`** with the
-following options (names are case-sensitive):
+The workflow looks for a **single-select field named exactly `Status`**. The
+option names used by `GH_ISSUE_INITIAL_VALUES` and `GH_ISSUE_CLOSE_STATUS` must
+exist in the project (case-sensitive).
+
+Default options required unless overridden:
 
 | Option | Used when |
 |---|---|
-| `Backlog` | Issue is opened |
-| `Done` | Issue is closed |
-
-If either option is missing or named differently, the corresponding sync step
-will fail silently (empty option ID).
+| `Backlog` | Issue opened (default initial Status) |
+| `Done` | Issue closed (default close Status) |
 
 ---
 
@@ -69,8 +91,9 @@ will fail silently (empty option ID).
 
 - **Sub-issues are not synced** — GitHub does not emit webhook events for
   sub-issues; only top-level issues trigger the `issues` event.
-- **Status field name is hardcoded** — the field must be named `Status` with
-  options named `Backlog` (on open) and `Done` (on close).
+- **Status field name is hardcoded** — the field must be named `Status`.
+- **Number and date fields** in `GH_ISSUE_INITIAL_VALUES` are not supported;
+  only single-select and text fields.
 
 ---
 
@@ -111,10 +134,16 @@ The issue was not previously added to the project. This can happen if:
 
 To recover, manually add the issue to the project from the project board.
 
-### Status not updated to Done
+### Status not updated on close
 
 Verify the target project has:
 - A single-select field named exactly `Status`
-- An option named exactly `Done`
+- An option matching the value of `GH_ISSUE_CLOSE_STATUS` (default: `Done`)
 
 Field and option names are case-sensitive.
+
+### Field not found warning in `Set initial field values`
+
+The step prints `Warning: field '<name>' not found, skipping.` when a key in
+`GH_ISSUE_INITIAL_VALUES` does not match any field in the project. Check for
+typos or extra spaces in the variable value.
