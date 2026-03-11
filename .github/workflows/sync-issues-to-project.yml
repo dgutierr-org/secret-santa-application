@@ -35,9 +35,177 @@ jobs:
             --jq '.data.organization.projectV2.id')
           echo "id=$PROJECT_ID" >> $GITHUB_OUTPUT
 
+      - name: Import existing repo issues
+        if: github.event_name == 'workflow_dispatch' && vars.GH_IMPORT_EXISTING_ISSUES == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT_TOKEN }}
+        run: |
+          PROJECT_ID="${{ steps.project.outputs.id }}"
+          INITIAL_VALUES="${{ vars.GH_ISSUE_INITIAL_VALUES }}"
+
+          # Fetch project fields once if initial values are configured
+          FIELDS_JSON="[]"
+          if [ -n "$INITIAL_VALUES" ]; then
+            FIELDS_JSON=$(gh api graphql -f query='
+              query($projectId: ID!) {
+                node(id: $projectId) {
+                  ... on ProjectV2 {
+                    fields(first: 20) {
+                      nodes {
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          name
+                          options { id name }
+                        }
+                        ... on ProjectV2Field {
+                          id
+                          name
+                          dataType
+                        }
+                      }
+                    }
+                  }
+                }
+              }' \
+              -f projectId="$PROJECT_ID" \
+              --jq '.data.node.fields.nodes')
+          fi
+
+          # Helper: apply GH_ISSUE_INITIAL_VALUES to a project item
+          apply_fields() {
+            local ITEM_ID="$1"
+            local ISSUE_NUMBER="$2"
+            while IFS= read -r PAIR; do
+              PAIR=$(echo "$PAIR" | xargs)
+              [ -z "$PAIR" ] && continue
+              KEY=$(echo "$PAIR" | cut -d= -f1 | xargs)
+              VALUE=$(echo "$PAIR" | cut -d= -f2- | xargs)
+              if [ "$KEY" = "Assignees" ]; then
+                echo "$VALUE" | tr ' ' '\n' | jq -R . | jq -s '{assignees: .}' | \
+                  gh api "repos/${{ github.repository }}/issues/$ISSUE_NUMBER/assignees" \
+                  --method POST --input -
+              else
+                FIELD_ID=$(echo "$FIELDS_JSON" | jq -r \
+                  --arg name "$KEY" \
+                  '.[] | select(.name == $name) | .id // empty' | head -1)
+                [ -z "$FIELD_ID" ] && echo "Warning: field '$KEY' not found, skipping." && continue
+                OPTION_ID=$(echo "$FIELDS_JSON" | jq -r \
+                  --arg name "$KEY" --arg val "$VALUE" \
+                  '.[] | select(.name == $name) | .options[]? | select(.name == $val) | .id // empty')
+                if [ -n "$OPTION_ID" ]; then
+                  gh api graphql -f query='
+                    mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                      updateProjectV2ItemFieldValue(input: {
+                        projectId: $projectId
+                        itemId: $itemId
+                        fieldId: $fieldId
+                        value: { singleSelectOptionId: $optionId }
+                      }) { projectV2Item { id } }
+                    }' \
+                    -f projectId="$PROJECT_ID" -f itemId="$ITEM_ID" \
+                    -f fieldId="$FIELD_ID" -f optionId="$OPTION_ID"
+                else
+                  gh api graphql -f query='
+                    mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $text: String!) {
+                      updateProjectV2ItemFieldValue(input: {
+                        projectId: $projectId
+                        itemId: $itemId
+                        fieldId: $fieldId
+                        value: { text: $text }
+                      }) { projectV2Item { id } }
+                    }' \
+                    -f projectId="$PROJECT_ID" -f itemId="$ITEM_ID" \
+                    -f fieldId="$FIELD_ID" -f text="$VALUE"
+                fi
+              fi
+            done < <(echo "$INITIAL_VALUES" | tr ',' '\n')
+          }
+
+          # Fetch all open repo issues (node_id + number)
+          REPO_ISSUES=$(gh api "repos/${{ github.repository }}/issues" \
+            --paginate | jq -s '[ .[][] | {node_id, number} ]')
+
+          # Fetch all existing project content node IDs (paginated)
+          PROJECT_IDS=""
+          CURSOR=""
+          while true; do
+            if [ -z "$CURSOR" ]; then
+              PAGE=$(gh api graphql -f query='
+                query($projectId: ID!) {
+                  node(id: $projectId) {
+                    ... on ProjectV2 {
+                      items(first: 100) {
+                        pageInfo { hasNextPage endCursor }
+                        nodes { content { ... on Issue { id } } }
+                      }
+                    }
+                  }
+                }' \
+                -f projectId="$PROJECT_ID")
+            else
+              PAGE=$(gh api graphql -f query='
+                query($projectId: ID!, $cursor: String!) {
+                  node(id: $projectId) {
+                    ... on ProjectV2 {
+                      items(first: 100, after: $cursor) {
+                        pageInfo { hasNextPage endCursor }
+                        nodes { content { ... on Issue { id } } }
+                      }
+                    }
+                  }
+                }' \
+                -f projectId="$PROJECT_ID" -f cursor="$CURSOR")
+            fi
+            PROJECT_IDS="$PROJECT_IDS"$'\n'"$(echo "$PAGE" | jq -r '.data.node.items.nodes[].content.id // empty')"
+            HAS_NEXT=$(echo "$PAGE" | jq -r '.data.node.items.pageInfo.hasNextPage')
+            [ "$HAS_NEXT" != "true" ] && break
+            CURSOR=$(echo "$PAGE" | jq -r '.data.node.items.pageInfo.endCursor')
+          done
+
+          PROJECT_IDS_JSON=$(echo "$PROJECT_IDS" | grep -v '^$' | jq -R . | jq -s '.')
+
+          # Find issues not yet in the project
+          MISSING=$(echo "$REPO_ISSUES" | jq -c \
+            --argjson existing "$PROJECT_IDS_JSON" \
+            '.[] | select(.node_id | IN($existing[]) | not)')
+
+          if [ -z "$MISSING" ]; then
+            echo "No new issues to import."
+            exit 0
+          fi
+
+          IMPORTED=0
+          FAILED=0
+          while IFS= read -r ISSUE; do
+            NODE_ID=$(echo "$ISSUE" | jq -r '.node_id')
+            ISSUE_NUMBER=$(echo "$ISSUE" | jq -r '.number')
+
+            ITEM_ID=$(gh api graphql -f query='
+              mutation($projectId: ID!, $contentId: ID!) {
+                addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
+                  item { id }
+                }
+              }' \
+              -f projectId="$PROJECT_ID" \
+              -f contentId="$NODE_ID" \
+              --jq '.data.addProjectV2ItemById.item.id')
+
+            if [ -z "$ITEM_ID" ]; then
+              echo "Warning: failed to add issue #$ISSUE_NUMBER"
+              FAILED=$((FAILED + 1))
+              continue
+            fi
+
+            [ -n "$INITIAL_VALUES" ] && apply_fields "$ITEM_ID" "$ISSUE_NUMBER"
+            IMPORTED=$((IMPORTED + 1))
+            echo "Imported issue #$ISSUE_NUMBER"
+          done <<< "$MISSING"
+
+          echo "Done. Imported: $IMPORTED, Failed: $FAILED"
+
       - name: Add issue to project
         id: add_item
-        if: github.event.action == 'opened'
+        if: github.event.action == 'opened' && vars.GH_SYNC_ENABLED != 'false' && vars.GH_SYNC_ENABLED != 'off'
         env:
           GH_TOKEN: ${{ secrets.GH_PAT_TOKEN }}
         run: |
@@ -53,7 +221,7 @@ jobs:
           echo "item_id=$ITEM_ID" >> $GITHUB_OUTPUT
 
       - name: Set initial field values
-        if: github.event.action == 'opened'
+        if: github.event.action == 'opened' && vars.GH_SYNC_ENABLED != 'false' && vars.GH_SYNC_ENABLED != 'off'
         env:
           GH_TOKEN: ${{ secrets.GH_PAT_TOKEN }}
         run: |
@@ -93,7 +261,6 @@ jobs:
             VALUE=$(echo "$PAIR" | cut -d= -f2- | xargs)
 
             if [ "$KEY" = "Assignees" ]; then
-              # Add assignees to the source issue (space-separated usernames supported)
               echo "$VALUE" | tr ' ' '\n' | jq -R . | jq -s '{assignees: .}' | \
                 gh api "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/assignees" \
                 --method POST --input -
@@ -146,7 +313,7 @@ jobs:
 
       - name: Get item ID and close Status option ID
         id: find_item
-        if: github.event.action == 'closed'
+        if: github.event.action == 'closed' && vars.GH_SYNC_ENABLED != 'false' && vars.GH_SYNC_ENABLED != 'off'
         env:
           GH_TOKEN: ${{ secrets.GH_PAT_TOKEN }}
         run: |
@@ -235,7 +402,7 @@ jobs:
           echo "close_option_id=$CLOSE_OPTION_ID" >> $GITHUB_OUTPUT
 
       - name: Set item close Status
-        if: github.event.action == 'closed'
+        if: github.event.action == 'closed' && vars.GH_SYNC_ENABLED != 'false' && vars.GH_SYNC_ENABLED != 'off'
         env:
           GH_TOKEN: ${{ secrets.GH_PAT_TOKEN }}
         run: |

@@ -3,8 +3,8 @@
 Workflow file: `sync-issues-to-project.yml`
 
 Automatically adds issues to a GitHub Project in another organization when they
-are opened, sets configurable initial field values, and updates the Status when
-they are closed.
+are opened, sets configurable initial field values, updates the Status when they
+are closed, and optionally imports pre-existing repo issues on demand.
 
 ---
 
@@ -12,8 +12,9 @@ they are closed.
 
 | Event | Action |
 |---|---|
-| Issue opened | Issue is added to the target project; initial field values are applied |
-| Issue closed | Project item Status is updated to the configured close status |
+| Issue opened | Issue is added to the target project; initial field values are applied (skipped if `GH_SYNC_ENABLED=false` or `off`) |
+| Issue closed | Project item Status is updated to the configured close status (skipped if `GH_SYNC_ENABLED=false` or `off`) |
+| `workflow_dispatch` | If `GH_IMPORT_EXISTING_ISSUES=true`, imports all open repo issues not yet in the project with initial field values applied |
 
 The project item is natively linked to the source issue — no custom fields are
 needed. Clicking the item in the project board opens the original issue.
@@ -49,9 +50,19 @@ Go to **Repo → Settings → Secrets and variables → Actions → Variables**:
 | `GH_TARGET_PROJECT` | yes | — | `kubesmarts:1` |
 | `GH_ISSUE_INITIAL_VALUES` | no | — | `Status=Backlog, Area=Tooling, Assignees=lornakelly` |
 | `GH_ISSUE_CLOSE_STATUS` | no | `Done` | `Done` |
+| `GH_SYNC_ENABLED` | no | `true` | `false` |
+| `GH_IMPORT_EXISTING_ISSUES` | no | `false` | `true` |
 
 The project number is visible in the project URL:
 `https://github.com/orgs/<org>/projects/<number>`
+
+**`GH_SYNC_ENABLED`** — set to `false` or `off` to pause syncing without removing
+the workflow. `workflow_dispatch` runs (e.g. for importing) are not affected.
+
+**`GH_IMPORT_EXISTING_ISSUES`** — set to `true` and trigger the workflow manually
+via **Actions → Run workflow** to import all open repo issues not already in the
+project. The same `GH_ISSUE_INITIAL_VALUES` rules apply. Issues already in the
+project are skipped. The run prints a summary: `Imported: N, Failed: N`.
 
 #### `GH_ISSUE_INITIAL_VALUES` format
 
