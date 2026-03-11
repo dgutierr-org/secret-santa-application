@@ -69,9 +69,6 @@ will fail silently (empty option ID).
 
 - **Sub-issues are not synced** — GitHub does not emit webhook events for
   sub-issues; only top-level issues trigger the `issues` event.
-- **100 item cap** — the `find_item` step fetches up to 100 project items when
-  searching for a closed issue. Projects with more than 100 items may miss the
-  match. Pagination support would be needed for large projects.
 - **Status field name is hardcoded** — the field must be named `Status` with
   options named `Backlog` (on open) and `Done` (on close).
 

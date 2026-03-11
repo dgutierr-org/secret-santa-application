@@ -105,29 +105,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_PAT_TOKEN }}
         run: |
-          RESULT=$(gh api graphql -f query='
+          # Fetch Status field info once
+          FIELDS_RESULT=$(gh api graphql -f query='
             query($projectId: ID!) {
               node(id: $projectId) {
                 ... on ProjectV2 {
-                  items(first: 100) {
-                    nodes {
-                      id
-                      content {
-                        ... on Issue {
-                          id
-                        }
-                      }
-                    }
-                  }
                   fields(first: 20) {
                     nodes {
                       ... on ProjectV2SingleSelectField {
                         id
                         name
-                        options {
-                          id
-                          name
-                        }
+                        options { id name }
                       }
                     }
                   }
@@ -136,15 +124,62 @@ jobs:
             }' \
             -f projectId="${{ steps.project.outputs.id }}")
 
-          ITEM_ID=$(echo "$RESULT" | jq -r \
-            --arg issueId "${{ github.event.issue.node_id }}" \
-            '.data.node.items.nodes[] | select(.content.id == $issueId) | .id')
-
-          FIELD_ID=$(echo "$RESULT" | jq -r \
+          FIELD_ID=$(echo "$FIELDS_RESULT" | jq -r \
             '.data.node.fields.nodes[] | select(.name == "Status") | .id')
 
-          DONE_OPTION_ID=$(echo "$RESULT" | jq -r \
+          DONE_OPTION_ID=$(echo "$FIELDS_RESULT" | jq -r \
             '.data.node.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "Done") | .id')
+
+          # Paginate items until the matching issue is found
+          ITEM_ID=""
+          CURSOR=""
+          while true; do
+            if [ -z "$CURSOR" ]; then
+              PAGE_RESULT=$(gh api graphql -f query='
+                query($projectId: ID!) {
+                  node(id: $projectId) {
+                    ... on ProjectV2 {
+                      items(first: 100) {
+                        pageInfo { hasNextPage endCursor }
+                        nodes {
+                          id
+                          content { ... on Issue { id } }
+                        }
+                      }
+                    }
+                  }
+                }' \
+                -f projectId="${{ steps.project.outputs.id }}")
+            else
+              PAGE_RESULT=$(gh api graphql -f query='
+                query($projectId: ID!, $cursor: String!) {
+                  node(id: $projectId) {
+                    ... on ProjectV2 {
+                      items(first: 100, after: $cursor) {
+                        pageInfo { hasNextPage endCursor }
+                        nodes {
+                          id
+                          content { ... on Issue { id } }
+                        }
+                      }
+                    }
+                  }
+                }' \
+                -f projectId="${{ steps.project.outputs.id }}" \
+                -f cursor="$CURSOR")
+            fi
+
+            ITEM_ID=$(echo "$PAGE_RESULT" | jq -r \
+              --arg issueId "${{ github.event.issue.node_id }}" \
+              '.data.node.items.nodes[] | select(.content.id == $issueId) | .id')
+
+            [ -n "$ITEM_ID" ] && break
+
+            HAS_NEXT=$(echo "$PAGE_RESULT" | jq -r '.data.node.items.pageInfo.hasNextPage')
+            [ "$HAS_NEXT" != "true" ] && break
+
+            CURSOR=$(echo "$PAGE_RESULT" | jq -r '.data.node.items.pageInfo.endCursor')
+          done
 
           echo "item_id=$ITEM_ID" >> $GITHUB_OUTPUT
           echo "field_id=$FIELD_ID" >> $GITHUB_OUTPUT
