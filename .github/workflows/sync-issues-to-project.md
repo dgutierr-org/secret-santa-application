@@ -1,3 +1,19 @@
+<!--
+   Copyright 2021-Present The Serverless Workflow Specification Authors
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+-->
+
 # Sync Issues to Target GitHub Project
 
 Workflow file: `sync-issues-to-project.yml`
@@ -30,6 +46,9 @@ The PAT must belong to a user with access to the target org's project.
 Required scopes:
 - `project` — read/write access to GitHub Projects v2
 - `read:org` — required to resolve the org's project by number
+- `repo` (private repos) or `public_repo` (public repos) — required only if
+  `GH_ISSUE_INITIAL_VALUES` includes `Assignees=...`, as the workflow calls the
+  REST API to add assignees directly to the source repo issue
 
 > Classic PATs only. Fine-grained PATs do not yet support Projects v2 mutations.
 
@@ -47,17 +66,22 @@ Go to **Repo → Settings → Secrets and variables → Actions → Variables**:
 
 | Name | Required | Default | Example |
 |---|---|---|---|
-| `GH_TARGET_PROJECT` | yes | — | `kubesmarts:1` |
-| `GH_ISSUE_INITIAL_VALUES` | no | — | `Status=Backlog, Area=Tooling, Assignees=lornakelly` |
+| `GH_TARGET_PROJECT` | yes | — | `my-org:1` |
+| `GH_ISSUE_INITIAL_VALUES` | no | — | `Status=Backlog, Area=Tooling, Assignees=user1` |
 | `GH_ISSUE_CLOSE_STATUS` | no | `Done` | `Done` |
 | `GH_SYNC_ENABLED` | no | `true` | `false` |
 | `GH_IMPORT_EXISTING_ISSUES` | no | `false` | `true` |
+| `GH_AUTHORS_FILTER` | no | — | `user1, user2` |
 
 The project number is visible in the project URL:
 `https://github.com/orgs/<org>/projects/<number>`
 
 **`GH_SYNC_ENABLED`** — set to `false` or `off` to pause syncing without removing
 the workflow. `workflow_dispatch` runs (e.g. for importing) are not affected.
+
+**`GH_AUTHORS_FILTER`** — comma-separated list of GitHub usernames. When set, only
+issues created by one of the listed authors are synced to the target project. If
+unset or empty, all authors are included.
 
 **`GH_IMPORT_EXISTING_ISSUES`** — set to `true` and trigger the workflow manually
 via **Actions → Run workflow** to import all open repo issues not already in the
@@ -70,7 +94,7 @@ Comma-separated `field=value` pairs. Field names must match the project field
 names exactly (case-sensitive). Example:
 
 ```
-Status=Backlog, Area=Tooling, Assignees=lornakelly
+Status=Backlog, Area=Tooling, Assignees=user1
 ```
 
 Supported field types:
@@ -138,11 +162,11 @@ Common causes:
 
 ### Item not found on close (`item_id` is empty)
 
-The issue was not previously added to the project. This can happen if:
-- The issue was opened before the workflow was installed
-- The `opened` sync failed for that issue
+If the issue is not already in the project when it is closed (e.g., it was opened before the workflow was installed, or the `opened` sync failed), the workflow automatically adds it to the project and then sets the close Status.
 
-To recover, manually add the issue to the project from the project board.
+If the close path still fails, likely causes are:
+- The PAT lacks `project` write access to the target org's project
+- The project ID lookup failed (check `GH_TARGET_PROJECT` format and PAT scopes)
 
 ### Status not updated on close
 
